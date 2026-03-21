@@ -96,6 +96,8 @@ async function initDB() {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS threads_post_id TEXT;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS metrics JSONB DEFAULT '{}';
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS last_stats_update TIMESTAMPTZ;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'active';
     `);
 
   } finally {
@@ -168,11 +170,14 @@ const Accounts = {
   },
   create: async (workspaceId, data) => {
     const r = await pool.query(
-      `INSERT INTO accounts (workspace_id,platform,handle,name,color,icon,token,channel_id,threads_user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO accounts (workspace_id,platform,handle,name,color,icon,token,channel_id,threads_user_id,token_expires_at,account_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [workspaceId, data.platform, data.handle, data.name,
-       data.color||"#00d4aa", data.icon||"📱",
-       data.token||null, data.channel_id||null, data.threads_user_id||null]
+       data.color || "#00d4aa", data.icon || "📱",
+       data.token || null, data.channel_id || null,
+       data.threads_user_id || null,
+       data.token_expires_at || null,
+       data.account_status || "active"]
     );
     return r.rows[0];
   },

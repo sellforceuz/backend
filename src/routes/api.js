@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const rateLimit = require("express-rate-limit");
-const { Accounts, Posts, Usage, Log, PLAN_LIMITS } = require("../db");
+const { Accounts, Posts, Usage, Log, PLAN_LIMITS, pool } = require("../db");
 const { requireAuth, checkLimit } = require("../middleware/auth");
 const { generatePost } = require("../services/ai");
 const telegram = require("../services/telegram");
@@ -68,9 +68,56 @@ router.post("/accounts", async (req, res) => {
     if (!platform || !handle || !name) return res.status(400).json({ error: "Укажи platform, handle и name" });
     if (!VALID_PLATFORMS.includes(platform)) return res.status(400).json({ error: "Платформа должна быть telegram или threads" });
 
-    const account = await Accounts.create(req.workspaceId, { platform, handle, name, color, icon, token, channel_id, threads_user_id });
-    await Log.add(req.workspaceId, "account_added", platform, `Аккаунт ${handle} добавлен`);
-    res.json({ account });
+    let finalToken = token || null;
+    let tokenExpiresAt = null;
+    let verifiedInfo = null;
+
+    // ── Верификация и подготовка токенов ──────────────────────────────────────
+    if (platform === "telegram" && channel_id) {
+      // Верифицируем через getChat — сразу узнаём об ошибке до сохранения
+      try {
+        verifiedInfo = await telegram.verifyTelegram(channel_id, token || undefined);
+      } catch (err) {
+        return res.status(400).json({ error: `Ошибка верификации Telegram: ${err.message}` });
+      }
+    }
+
+    if (platform === "threads" && token && threads_user_id) {
+      // Верифицируем токен
+      try {
+        verifiedInfo = await threads.verifyThreadsToken(threads_user_id, token);
+      } catch (err) {
+        return res.status(400).json({ error: `Ошибка верификации Threads: ${err.message}` });
+      }
+      // Обмениваем краткосрочный токен на 60-дневный
+      if (process.env.THREADS_APP_SECRET) {
+        try {
+          const exchanged = await threads.exchangeLongLivedToken(token);
+          finalToken = exchanged.access_token;
+          tokenExpiresAt = exchanged.expires_at;
+        } catch (err) {
+          console.warn("Token exchange failed, saving original:", err.message);
+          // Сохраняем оригинальный токен если обмен не удался
+        }
+      }
+    }
+
+    const accountData = {
+      platform, handle, name,
+      color: color || "#00d4aa",
+      icon: icon || "📱",
+      token: finalToken,
+      channel_id: channel_id || null,
+      threads_user_id: threads_user_id || null,
+      token_expires_at: tokenExpiresAt,
+      account_status: "active",
+    };
+
+    const account = await Accounts.create(req.workspaceId, accountData);
+    await Log.add(req.workspaceId, "account_added", platform,
+      `Аккаунт ${handle} добавлен${verifiedInfo ? ` (${verifiedInfo.title || verifiedInfo.username})` : ""}`);
+
+    res.json({ account, verified: verifiedInfo });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

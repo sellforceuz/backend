@@ -56,4 +56,25 @@ async function getMemberCount(chatId, botToken) {
   }
 }
 
-module.exports = { sendMessage, getMemberCount };
+// Верифицировать токен и chat ID перед сохранением аккаунта
+async function verifyTelegram(chatId, botToken) {
+  const token = botToken || getBotToken();
+  if (!token) throw new Error("TG_BOT_TOKEN не задан");
+
+  const res = await fetchWithTimeout(
+    `https://api.telegram.org/bot${token}/getChat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId }),
+    },
+    10000
+  );
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(`Telegram: ${data.description} (проверь Chat ID и Bot Token)`);
+  }
+  return { title: data.result.title, type: data.result.type, username: data.result.username };
+}
+
+module.exports = { sendMessage, getMemberCount, verifyTelegram };
