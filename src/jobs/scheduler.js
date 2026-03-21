@@ -149,6 +149,17 @@ function startScheduler() {
 
   // Обновление статистики каждые 4 часа
   cron.schedule("0 */4 * * *", () => updateAllStats(), { timezone: "UTC" });
+
+  // ─── АВТОПИЛОТ: ежедневная генерация постов в 00:05 UTC (05:05 Ташкент) ────
+  cron.schedule("5 0 * * *", async () => {
+    console.log("[Autopilot] ⏰ Запуск ежедневной генерации контента (00:05 UTC)");
+    try {
+      const { runAutopilotForAll } = require("../services/autopilot");
+      await runAutopilotForAll();
+    } catch (err) {
+      console.error("[Autopilot] ❌ Ошибка cron:", err.message);
+    }
+  }, { timezone: "UTC" });
 }
 
 module.exports = { startScheduler };

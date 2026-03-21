@@ -98,6 +98,9 @@ async function initDB() {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS last_stats_update TIMESTAMPTZ;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'active';
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS autopilot_enabled BOOLEAN DEFAULT false;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS content_focus TEXT;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS daily_post_count INTEGER DEFAULT 5;
     `);
 
   } finally {
@@ -183,10 +186,16 @@ const Accounts = {
   },
   update: async (id, workspaceId, data) => {
     const r = await pool.query(
-      `UPDATE accounts SET handle=$3,name=$4,token=$5,channel_id=$6,threads_user_id=$7,color=$8,icon=$9
+      `UPDATE accounts SET handle=$3,name=$4,token=$5,channel_id=$6,threads_user_id=$7,color=$8,icon=$9,
+       autopilot_enabled=COALESCE($10, autopilot_enabled),
+       content_focus=COALESCE($11, content_focus),
+       daily_post_count=COALESCE($12, daily_post_count)
        WHERE id=$1 AND workspace_id=$2 RETURNING *`,
       [id, workspaceId, data.handle, data.name, data.token,
-       data.channel_id, data.threads_user_id, data.color, data.icon]
+       data.channel_id, data.threads_user_id, data.color, data.icon,
+       data.autopilot_enabled ?? null,
+       data.content_focus ?? null,
+       data.daily_post_count ?? null]
     );
     return r.rows[0];
   },

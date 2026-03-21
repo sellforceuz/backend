@@ -151,6 +151,20 @@ router.delete("/accounts/:id", async (req, res) => {
   }
 });
 
+// POST /api/accounts/:id/trigger-autopilot — ручной запуск автопилота для теста
+router.post("/accounts/:id/trigger-autopilot", async (req, res) => {
+  try {
+    const owned = await getOwnedAccount(req.workspaceId, req.params.id);
+    if (!owned) return res.status(404).json({ error: "Аккаунт не найден" });
+
+    const { runDailyAutopilot } = require("../services/autopilot");
+    const result = await runDailyAutopilot({ ...owned, workspace_id: req.workspaceId });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/posts
 router.get("/posts", async (req, res) => {
   try {
