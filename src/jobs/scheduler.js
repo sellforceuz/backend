@@ -72,11 +72,24 @@ async function publishPost(post) {
     console.log(`✅ Пост #${post.id} опубликован`);
 
   } else {
-    // Полная ошибка
-    await Posts.markFailed(
-      post.id,
-      `Нет доступных платформ или ошибка публикации (упали: ${results.failed.join(", ")})`
-    );
+    // Полный провал — применяем retry logic (макс 3 попытки, через 15 мин)
+    const retryCount = (post.retry_count || 0) + 1;
+    if (retryCount <= 3) {
+      const retryAt = new Date(Date.now() + 15 * 60 * 1000); // +15 минут
+      await pool.query(
+        `UPDATE posts SET status='scheduled', retry_count=$2, scheduled_at=$3,
+         error_log=$4, updated_at=NOW() WHERE id=$1`,
+        [post.id, retryCount, retryAt,
+         `Попытка ${retryCount}/3: ${results.failed.join(", ")} (следующая в ${retryAt.toLocaleTimeString("ru")})`]
+      );
+      console.log(`🔄 Пост #${post.id} — повтор #${retryCount}/3 через 15 мин`);
+    } else {
+      await Posts.markFailed(
+        post.id,
+        `Исчерпаны все 3 попытки. Ошибка: ${results.failed.join(", ")}`
+      );
+      console.log(`❌ Пост #${post.id} — окончательный провал после 3 попыток`);
+    }
   }
 }
 

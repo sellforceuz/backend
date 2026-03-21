@@ -253,6 +253,22 @@ router.delete("/posts/:id", async (req, res) => {
   }
 });
 
+// POST /api/posts/:id/retry — повторить публикацию провального поста
+router.post("/posts/:id/retry", async (req, res) => {
+  try {
+    const retryAt = new Date(Date.now() + 60 * 1000); // через 1 минуту
+    await pool.query(
+      `UPDATE posts SET status='scheduled', retry_count=0, scheduled_at=$2,
+       error_log=NULL, updated_at=NOW()
+       WHERE id=$1 AND workspace_id=$3`,
+      [req.params.id, retryAt, req.workspaceId]
+    );
+    res.json({ ok: true, retryAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/generate — AI генерация поста
 router.post("/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
   try {

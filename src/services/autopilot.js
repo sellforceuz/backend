@@ -4,13 +4,13 @@ const { pool } = require("../db");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// Временные слоты для 5 постов в день (Ташкент UTC+5)
+// Временные слоты — «человеческое» время (Ташкент UTC+5)
 const TIME_SLOTS = [
-  { hour: 9,  minBase: 0  },  // 09:00-10:00 Утро
-  { hour: 12, minBase: 0  },  // 12:00-13:00 Обед
-  { hour: 16, minBase: 0  },  // 16:00-17:00 День
-  { hour: 19, minBase: 0  },  // 19:00-20:00 Вечер
-  { hour: 22, minBase: 0  },  // 22:00-23:30 Поздний вечер
+  { hour: 9,  minBase: 15 }, // 09:15 Утро
+  { hour: 12, minBase: 45 }, // 12:45 Обед
+  { hour: 16, minBase: 20 }, // 16:20 День
+  { hour: 19, minBase: 10 }, // 19:10 Вечер
+  { hour: 22, minBase: 5  }, // 22:05 Поздний вечер
 ];
 
 const POST_FORMATS = [

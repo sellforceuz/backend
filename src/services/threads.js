@@ -70,10 +70,16 @@ async function verifyThreadsToken(userId, token) {
 async function publishPost(userId, token, text) {
   if (!token || !userId) throw new Error("Нет токена или userId для Threads");
 
+  // Очистка текста — убираем лишние переносы и пробелы (Meta API чувствителен)
+  const cleanText = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
   // Шаг 1: Создать черновик (Threads API требует query params, не JSON body)
   const containerParams = new URLSearchParams({
     media_type: "TEXT",
-    text,
+    text: cleanText,
     access_token: token,
   });
   const containerRes = await fetchWithTimeout(
@@ -82,8 +88,17 @@ async function publishPost(userId, token, text) {
     12000
   );
   const container = await containerRes.json();
-  if (container.error) throw new Error(`Threads container: ${container.error.message}`);
-  if (!container.id) throw new Error("Threads: не получен ID контейнера");
+
+  if (container.error) {
+    console.error(`[Threads] ❌ Container error:`, JSON.stringify(container.error));
+    throw new Error(`Threads container: ${container.error.message} (code: ${container.error.code})`);
+  }
+  if (!container.id) {
+    console.error(`[Threads] ❌ No container ID in response:`, JSON.stringify(container));
+    throw new Error("Threads: не получен ID контейнера");
+  }
+
+  console.log(`[Threads] ✅ Container created: ${container.id}`);
 
   // Пауза 2 сек (Threads рекомендует перед публикацией)
   await new Promise(r => setTimeout(r, 2000));
@@ -99,8 +114,13 @@ async function publishPost(userId, token, text) {
     12000
   );
   const published = await publishRes.json();
-  if (published.error) throw new Error(`Threads publish: ${published.error.message}`);
 
+  if (published.error) {
+    console.error(`[Threads] ❌ Publish error:`, JSON.stringify(published.error));
+    throw new Error(`Threads publish: ${published.error.message} (code: ${published.error.code})`);
+  }
+
+  console.log(`[Threads] ✅ Published! Post ID: ${published.id}`);
   return { post_id: published.id };
 }
 
