@@ -86,18 +86,9 @@ app.use(express.json({ limit: "1mb" }));
 // ─── HEALTH CHECK (отвечает сразу — до инициализации БД) ─────────────────────
 app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
-// ─── ROUTES ───────────────────────────────────────────────────────────────────
-try { app.use("/auth",  require("./routes/auth")); console.log("[Startup] ✅ auth routes"); }
-catch (e) { console.error("[Startup] ❌ routes/auth failed:", e.message); }
-
-try { app.use("/api",   require("./routes/api")); console.log("[Startup] ✅ api routes"); }
-catch (e) { console.error("[Startup] ❌ routes/api failed:", e.message); }
-
-try { app.use("/admin", require("./routes/admin")); console.log("[Startup] ✅ admin routes"); }
-catch (e) { console.error("[Startup] ❌ routes/admin failed:", e.message); }
-
-// ─── THREADS OAUTH CALLBACK ───────────────────────────────────────────────────
+// ─── THREADS OAUTH CALLBACK (must be before /auth router) ────────────────────────────────
 app.get("/auth/threads/callback", async (req, res) => {
+  console.log("[Threads OAuth] callback hit, code:", req.query.code ? "present" : "missing");
   const { code } = req.query;
   if (!code) return res.send("<h2>❌ Код не найден</h2>");
   try {
@@ -115,7 +106,8 @@ app.get("/auth/threads/callback", async (req, res) => {
       body: params.toString(),
     });
     const data = await r.json();
-    if (data.error) return res.send(`<h2>❌ ${data.error.message}</h2>`);
+    console.log("[Threads OAuth] response:", JSON.stringify(data).slice(0, 200));
+    if (data.error) return res.send(`<h2>❌ ${data.error.message}</h2><pre>${JSON.stringify(data,null,2)}</pre>`);
     res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Threads Token</title>
       <style>body{font-family:monospace;padding:32px;background:#0d1117;color:#e6edf3}
       .box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin:12px 0}
@@ -123,12 +115,22 @@ app.get("/auth/threads/callback", async (req, res) => {
       <body><h2>✅ Токен получен!</h2>
       <div class="box"><b>Threads User ID:</b><div class="val">${data.user_id}</div></div>
       <div class="box"><b>Access Token:</b><div class="val">${data.access_token}</div></div>
-      <p>Скопируй оба значения и добавь аккаунт в SellForce → Аккаунты → + Добавить</p>
-      </body></html>`);
+      <p>Скопируй оба значения и добавь аккаунт в SellForce</p></body></html>`);
   } catch (err) {
+    console.error("[Threads OAuth] error:", err.message);
     res.send(`<h2>❌ Ошибка: ${err.message}</h2>`);
   }
 });
+
+// ─── ROUTES ───────────────────────────────────────────────────────────────────
+try { app.use("/auth",  require("./routes/auth")); console.log("[Startup] ✅ auth routes"); }
+catch (e) { console.error("[Startup] ❌ routes/auth failed:", e.message); }
+
+try { app.use("/api",   require("./routes/api")); console.log("[Startup] ✅ api routes"); }
+catch (e) { console.error("[Startup] ❌ routes/api failed:", e.message); }
+
+try { app.use("/admin", require("./routes/admin")); console.log("[Startup] ✅ admin routes"); }
+catch (e) { console.error("[Startup] ❌ routes/admin failed:", e.message); }
 
 
 // ─── ERROR HANDLER ────────────────────────────────────────────────────────────
