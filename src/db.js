@@ -198,6 +198,7 @@ const Posts = {
       JOIN accounts a ON a.id=p.account_id
       WHERE p.status='scheduled' AND p.scheduled_at <= NOW()
       ORDER BY p.scheduled_at ASC
+      LIMIT 50
     `);
     return r.rows;
   },

@@ -1,13 +1,49 @@
 // src/routes/api.js — основные API для пользователей
 const express = require("express");
 const router = express.Router();
+const rateLimit = require("express-rate-limit");
 const { Accounts, Posts, Usage, Log, PLAN_LIMITS } = require("../db");
 const { requireAuth, checkLimit } = require("../middleware/auth");
 const { generatePost } = require("../services/ai");
 const telegram = require("../services/telegram");
-const threads = require("../services/threads");
+const threads  = require("../services/threads");
+
+// ─── FIX #4: Rate limiter для всех /api эндпоинтов (30 req/мин) ──────────────
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много запросов — подождите минуту" },
+});
+
+// ─── FIX #4: Жёсткий лимит на генерацию AI (10 req/мин) ─────────────────────
+const generateLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком частая генерация — подождите минуту" },
+});
 
 router.use(requireAuth);
+router.use(apiLimiter);
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const VALID_PLATFORMS = ["telegram", "threads"];
+
+// FIX #2: Валидация и санитизация платформ
+function sanitizePlatforms(platforms) {
+  const arr = Array.isArray(platforms) ? platforms : ["telegram"];
+  const clean = arr.filter(p => VALID_PLATFORMS.includes(p));
+  return clean.length > 0 ? clean : ["telegram"];
+}
+
+// FIX #1: Проверка, что account_id принадлежит текущему workspace
+async function getOwnedAccount(workspaceId, accountId) {
+  const accounts = await Accounts.getAll(workspaceId);
+  return accounts.find(a => a.id === parseInt(accountId)) || null;
+}
 
 // GET /api/accounts
 router.get("/accounts", async (req, res) => {
@@ -30,6 +66,7 @@ router.post("/accounts", async (req, res) => {
 
     const { platform, handle, name, color, icon, token, channel_id, threads_user_id } = req.body;
     if (!platform || !handle || !name) return res.status(400).json({ error: "Укажи platform, handle и name" });
+    if (!VALID_PLATFORMS.includes(platform)) return res.status(400).json({ error: "Платформа должна быть telegram или threads" });
 
     const account = await Accounts.create(req.workspaceId, { platform, handle, name, color, icon, token, channel_id, threads_user_id });
     await Log.add(req.workspaceId, "account_added", platform, `Аккаунт ${handle} добавлен`);
@@ -42,6 +79,10 @@ router.post("/accounts", async (req, res) => {
 // PUT /api/accounts/:id
 router.put("/accounts/:id", async (req, res) => {
   try {
+    // FIX #1: Проверяем владение аккаунтом перед обновлением
+    const owned = await getOwnedAccount(req.workspaceId, req.params.id);
+    if (!owned) return res.status(404).json({ error: "Аккаунт не найден" });
+
     const account = await Accounts.update(req.params.id, req.workspaceId, req.body);
     res.json({ account });
   } catch (err) {
@@ -52,6 +93,10 @@ router.put("/accounts/:id", async (req, res) => {
 // DELETE /api/accounts/:id
 router.delete("/accounts/:id", async (req, res) => {
   try {
+    // FIX #1: Проверяем владение аккаунтом перед удалением
+    const owned = await getOwnedAccount(req.workspaceId, req.params.id);
+    if (!owned) return res.status(404).json({ error: "Аккаунт не найден" });
+
     await Accounts.delete(req.params.id, req.workspaceId);
     res.json({ ok: true });
   } catch (err) {
@@ -75,7 +120,21 @@ router.post("/posts", async (req, res) => {
     const { account_id, text, platforms, scheduled_at } = req.body;
     if (!account_id || !text || !scheduled_at) return res.status(400).json({ error: "Укажи account_id, text и scheduled_at" });
 
-    const post = await Posts.create(req.workspaceId, { account_id, text, platforms, scheduled_at });
+    // FIX #2: Валидация длины текста
+    if (text.length > 4000) return res.status(400).json({ error: "Текст не может превышать 4000 символов" });
+
+    // FIX #1: Проверяем, что аккаунт принадлежит пользователю
+    const account = await getOwnedAccount(req.workspaceId, account_id);
+    if (!account) return res.status(404).json({ error: "Аккаунт не найден или не принадлежит вашему workspace" });
+
+    // FIX #2: Санитизация платформ
+    const cleanPlatforms = sanitizePlatforms(platforms);
+
+    // Валидация даты
+    const scheduledDate = new Date(scheduled_at);
+    if (isNaN(scheduledDate.getTime())) return res.status(400).json({ error: "Некорректная дата scheduled_at" });
+
+    const post = await Posts.create(req.workspaceId, { account_id, text, platforms: cleanPlatforms, scheduled_at });
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,12 +147,16 @@ router.post("/posts/publish-now", async (req, res) => {
     const { account_id, text, platforms } = req.body;
     if (!account_id || !text) return res.status(400).json({ error: "Укажи account_id и text" });
 
-    const accounts = await Accounts.getAll(req.workspaceId);
-    const account = accounts.find(a => a.id === parseInt(account_id));
+    // FIX #2: Валидация длины
+    if (text.length > 4000) return res.status(400).json({ error: "Текст не может превышать 4000 символов" });
+
+    // FIX #1: Проверяем владение аккаунтом
+    const account = await getOwnedAccount(req.workspaceId, account_id);
     if (!account) return res.status(404).json({ error: "Аккаунт не найден" });
 
     const results = [];
-    const plats = platforms || ["telegram"];
+    // FIX #2: Санитизация платформ
+    const plats = sanitizePlatforms(platforms);
 
     for (const platform of plats) {
       try {
@@ -130,10 +193,14 @@ router.delete("/posts/:id", async (req, res) => {
 });
 
 // POST /api/generate — AI генерация поста
-router.post("/generate", checkLimit("generation"), async (req, res) => {
+router.post("/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
   try {
     const { account_id, topic, tone, format, idea } = req.body;
     if (!topic) return res.status(400).json({ error: "Укажи тему (topic)" });
+
+    // FIX #2: Валидация длины темы и идеи
+    if (topic.length > 500) return res.status(400).json({ error: "Тема не может превышать 500 символов" });
+    if (idea && idea.length > 1000) return res.status(400).json({ error: "Контекст не может превышать 1000 символов" });
 
     const accounts = await Accounts.getAll(req.workspaceId);
     const account = accounts.find(a => a.id === parseInt(account_id));
@@ -180,7 +247,6 @@ router.get("/posts/:id/stats", async (req, res) => {
     const { pool } = require("../db");
     const { updatePostMetrics } = require("../services/stats");
 
-    // Получаем пост с данными аккаунта
     const r = await pool.query(`
       SELECT p.*, a.token, a.channel_id, a.threads_user_id
       FROM posts p
@@ -191,10 +257,8 @@ router.get("/posts/:id/stats", async (req, res) => {
     const post = r.rows[0];
     if (!post) return res.status(404).json({ error: "Пост не найден" });
 
-    // Принудительное обновление если last_stats_update > 30 мин назад или отсутствует
     const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
-    const needsUpdate = !post.last_stats_update ||
-                        new Date(post.last_stats_update) < thirtyMinAgo;
+    const needsUpdate = !post.last_stats_update || new Date(post.last_stats_update) < thirtyMinAgo;
 
     let metrics = post.metrics || {};
     if (needsUpdate && post.status !== "scheduled") {
@@ -215,7 +279,7 @@ router.get("/posts/:id/stats", async (req, res) => {
   }
 });
 
-// GET /api/posts/stats — аналитика: последние 50 постов с ID и метриками
+// GET /api/posts/stats — аналитика: последние 50 постов с метриками
 router.get("/posts/stats", async (req, res) => {
   try {
     const { pool } = require("../db");
@@ -239,4 +303,3 @@ router.get("/posts/stats", async (req, res) => {
 });
 
 module.exports = router;
-

@@ -89,9 +89,22 @@ async function start() {
   }
 
   // Запускаем HTTP-сервер СРАЗУ — Railway healthcheck пройдёт без ожидания БД
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("Server listening on port " + PORT);
   });
+
+  // FIX #5: Graceful shutdown — корректное завершение при SIGTERM/SIGINT (Docker, Railway)
+  function shutdown(signal) {
+    console.log(`${signal} received, graceful shutdown...`);
+    server.close(() => {
+      console.log("HTTP server closed");
+      process.exit(0);
+    });
+    // Принудительный выход через 10 сек если сервер не закрылся
+    setTimeout(() => { console.error("Forced exit"); process.exit(1); }, 10000);
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT",  () => shutdown("SIGINT"));
 
   // Инициализируем БД и admin асинхронно
   try {
