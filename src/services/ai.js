@@ -1,7 +1,7 @@
 // src/services/ai.js — AI генерация через Google Gemini
 const fetch = require("node-fetch");
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
 
 // FIX #2: Хелпер — fetch с таймаутом (AbortController)
 async function fetchWithTimeout(url, options, timeoutMs = 15000) {
