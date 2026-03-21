@@ -3,6 +3,7 @@ const cron = require("node-cron");
 const { Posts, Log, Usage, pool } = require("../db");
 const telegram = require("../services/telegram");
 const threads  = require("../services/threads");
+const { updatePostMetrics } = require("../services/stats");
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 let isRunning = false;
@@ -79,6 +80,47 @@ async function publishPost(post) {
   }
 }
 
+// ─── ОБНОВЛЕНИЕ СТАТИСТИКИ ────────────────────────────────────────────────────
+async function updateAllStats() {
+  console.log("[Stats] 📊 Запуск обновления метрик...");
+  try {
+    // Последние 30 постов за 3 дня со статусом published или partially_failed
+    const r = await pool.query(`
+      SELECT p.*, a.token, a.channel_id, a.threads_user_id AS acc_threads_user_id
+      FROM posts p
+      JOIN accounts a ON a.id = p.account_id
+      WHERE p.status IN ('published', 'partially_failed')
+        AND p.created_at >= NOW() - INTERVAL '3 days'
+      ORDER BY p.created_at DESC
+      LIMIT 30
+    `);
+
+    const posts = r.rows;
+    if (posts.length === 0) {
+      console.log("[Stats] Нет постов для обновления");
+      return;
+    }
+
+    console.log(`[Stats] Обновляем метрики для ${posts.length} постов...`);
+    for (const post of posts) {
+      try {
+        // Совмещаем поля аккаунта с полями поста
+        await updatePostMetrics({
+          ...post,
+          acc_token: post.token,
+        }, pool);
+      } catch (err) {
+        console.warn(`[Stats] ⚠️ Пост #${post.id}: ${err.message}`);
+      }
+      // Пауза 2 сек между постами — защита от лимитов API
+      await delay(2000);
+    }
+    console.log("[Stats] ✅ Обновление метрик завершено");
+  } catch (err) {
+    console.error("[Stats] ❌ Ошибка:", err.message);
+  }
+}
+
 function startScheduler() {
   console.log("🕐 Планировщик запущен");
 
@@ -104,6 +146,9 @@ function startScheduler() {
       isRunning = false;
     }
   });
+
+  // Обновление статистики каждые 4 часа
+  cron.schedule("0 */4 * * *", () => updateAllStats(), { timezone: "UTC" });
 }
 
 module.exports = { startScheduler };

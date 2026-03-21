@@ -95,6 +95,7 @@ async function initDB() {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS tg_message_id TEXT;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS threads_post_id TEXT;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS metrics JSONB DEFAULT '{}';
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS last_stats_update TIMESTAMPTZ;
     `);
 
   } finally {

@@ -174,6 +174,47 @@ router.get("/logs", async (req, res) => {
   }
 });
 
+// GET /api/posts/:id/stats — получить (и при необходимости обновить) метрики поста
+router.get("/posts/:id/stats", async (req, res) => {
+  try {
+    const { pool } = require("../db");
+    const { updatePostMetrics } = require("../services/stats");
+
+    // Получаем пост с данными аккаунта
+    const r = await pool.query(`
+      SELECT p.*, a.token, a.channel_id, a.threads_user_id
+      FROM posts p
+      JOIN accounts a ON a.id = p.account_id
+      WHERE p.id = $1 AND p.workspace_id = $2
+    `, [req.params.id, req.workspaceId]);
+
+    const post = r.rows[0];
+    if (!post) return res.status(404).json({ error: "Пост не найден" });
+
+    // Принудительное обновление если last_stats_update > 30 мин назад или отсутствует
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const needsUpdate = !post.last_stats_update ||
+                        new Date(post.last_stats_update) < thirtyMinAgo;
+
+    let metrics = post.metrics || {};
+    if (needsUpdate && post.status !== "scheduled") {
+      metrics = await updatePostMetrics({ ...post, acc_token: post.token }, pool);
+    }
+
+    res.json({
+      id: post.id,
+      status: post.status,
+      tg_message_id: post.tg_message_id,
+      threads_post_id: post.threads_post_id,
+      metrics,
+      last_stats_update: post.last_stats_update,
+      refreshed: needsUpdate,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/posts/stats — аналитика: последние 50 постов с ID и метриками
 router.get("/posts/stats", async (req, res) => {
   try {
