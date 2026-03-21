@@ -23,7 +23,8 @@ try {
 try {
   ({ startAutoPoster } = require("./jobs/autoposter"));
   console.log("[Startup] ✅ autoposter.js loaded");
-} catch (e) { console.error("[Startup] ❌ autoposter.js failed:", e.message); process.exit(1); }
+} catch (e) { console.warn("[Startup] ⚠️ autoposter.js skipped:", e.message); startAutoPoster = () => {}; }
+
 
 
 // ─── SEED TELEGRAM ACCOUNTS ───────────────────────────────────────────────────

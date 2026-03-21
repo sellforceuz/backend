@@ -2,7 +2,7 @@
 const cron   = require("node-cron");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { sendMessage } = require("../services/telegram");
-const { db } = require("../db");
+const { pool } = require("../db");
 
 // ─── КОНФИГУРАЦИЯ КАНАЛОВ ─────────────────────────────────────────────────────
 const CHANNELS = [
@@ -112,7 +112,7 @@ async function publishToChannel(channel, text) {
 
   // Логируем в БД если доступна
   try {
-    await db.query(
+    await pool.query(
       `INSERT INTO activity_log (user_id, type, message, platform) 
        VALUES (1, 'auto_publish', $1, 'telegram')`,
       [`Авто-пост в ${channel.title}: ${text.slice(0, 60)}...`]
@@ -152,7 +152,7 @@ async function runAutoPosting() {
       const msg = "Критическая ошибка лимитов AI, автопостинг приостановлен";
       console.error(`[AutoPoster] ❌ ${msg}`);
       try {
-        await db.query(
+        await pool.query(
           `INSERT INTO activity_log (user_id, type, message, platform)
            VALUES (1, 'auto_error', $1, 'system')`,
           [msg]
