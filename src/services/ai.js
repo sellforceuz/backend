@@ -1,21 +1,13 @@
-// src/services/ai.js — AI генерация через Google Gemini SDK
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// src/services/ai.js — AI генерация через Groq (бесплатный, быстрый)
+const fetch = require("node-fetch");
+
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 async function generatePost({ accountName, accountHandle, topic, tone, format, idea }) {
-  const apiKey = process.env.GOOGLE_AI_KEY;
-  if (!apiKey) throw new Error("GOOGLE_AI_KEY не задан в .env");
+  const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY не задан в Railway");
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  // Пробуем модели по приоритету
-  const models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
-  let lastError = null;
-
-  for (const modelName of models) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-
-      const prompt = `Ты — эксперт по контент-маркетингу для Threads и Telegram (рынок СНГ).
+  const prompt = `Ты — эксперт по контент-маркетингу для Threads и Telegram (рынок СНГ).
 
 Аккаунт: "${accountName}" (${accountHandle || ""})
 Тема: "${topic}"
@@ -33,23 +25,39 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 
 Верни ТОЛЬКО текст поста, без пояснений.`;
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text()?.trim();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
 
-      if (!text || text.length < 30) throw new Error("Пустой ответ от AI");
+  try {
+    const res = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "llama3-8b-8192",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        temperature: 0.9,
+      }),
+      signal: controller.signal,
+    });
 
-      console.log(`[AI] Успешно сгенерировано через ${modelName}`);
-      return text;
+    const data = await res.json();
 
-    } catch (err) {
-      console.warn(`[AI] Модель ${modelName} не сработала: ${err.message}`);
-      lastError = err;
-      // Если это не quota ошибка — пробуем следующую модель
-      // Если quota — тоже пробуем следующую
-    }
+    if (data.error) throw new Error(`AI: ${data.error.message}`);
+
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text || text.length < 30) throw new Error("AI вернул пустой ответ");
+
+    return text;
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("AI: таймаут запроса (15 сек)");
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  throw new Error(`Gemini: ${lastError?.message || "все модели недоступны"}`);
 }
 
 module.exports = { generatePost };
