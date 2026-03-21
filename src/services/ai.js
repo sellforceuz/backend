@@ -3,6 +3,20 @@ const fetch = require("node-fetch");
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
+// FIX #2: Хелпер — fetch с таймаутом (AbortController)
+async function fetchWithTimeout(url, options, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Gemini: таймаут запроса (15 сек)");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generatePost({ accountName, accountHandle, topic, tone, format, idea }) {
   const apiKey = process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GOOGLE_AI_KEY не задан в .env");
@@ -25,14 +39,18 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 
 Верни ТОЛЬКО текст поста, без пояснений.`;
 
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
-    }),
-  });
+  const res = await fetchWithTimeout(
+    `${GEMINI_URL}?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
+      }),
+    },
+    15000 // 15 секунд
+  );
 
   const data = await res.json();
   if (data.error) throw new Error(`Gemini: ${data.error.message}`);

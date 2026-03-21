@@ -2,7 +2,7 @@
 const cron = require("node-cron");
 const { Posts, Log, Usage } = require("../db");
 const telegram = require("../services/telegram");
-const threads = require("../services/threads");
+const threads  = require("../services/threads");
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
 let isRunning = false;
@@ -33,6 +33,7 @@ async function publishPost(post) {
 
       await delay(1000);
     } catch (err) {
+      // Логирование ошибки сохранено
       await Log.add(wid, "publish_fail", platform, `Пост #${post.id}: ${err.message}`);
       console.error(`❌ [${platform}] post #${post.id}:`, err.message);
       await delay(2000);
@@ -58,9 +59,13 @@ function startScheduler() {
       const due = await Posts.getDue();
       if (due.length > 0) {
         console.log(`📤 Публикуем ${due.length} пост(ов)`);
-        for (const post of due) {
-          await publishPost(post);
-          await delay(500);
+
+        // FIX #5: Батчевая обработка по 5 параллельно вместо поочерёдной
+        const BATCH_SIZE = 5;
+        for (let i = 0; i < due.length; i += BATCH_SIZE) {
+          const batch = due.slice(i, i + BATCH_SIZE);
+          await Promise.allSettled(batch.map(post => publishPost(post)));
+          if (i + BATCH_SIZE < due.length) await delay(1000);
         }
       }
     } catch (err) {

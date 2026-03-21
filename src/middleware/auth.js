@@ -1,6 +1,6 @@
 // src/middleware/auth.js — проверка JWT и прав
 const { verifyAccessToken } = require("../services/auth");
-const { Workspaces, Usage, PLAN_LIMITS } = require("../db");
+const { Workspaces, Usage, PLAN_LIMITS, Users, pool } = require("../db");
 
 async function requireAuth(req, res, next) {
   const auth = req.headers.authorization;
@@ -10,8 +10,14 @@ async function requireAuth(req, res, next) {
   const payload = verifyAccessToken(token);
   if (!payload) return res.status(401).json({ error: "Токен недействителен или истёк" });
 
+  // FIX #7: Проверяем статус пользователя — заблокированный не получает доступ
+  const user = await Users.findById(payload.userId);
+  if (!user || user.status === "blocked") {
+    return res.status(403).json({ error: "Аккаунт заблокирован или не найден" });
+  }
+
   const workspace = await Workspaces.getByUserId(payload.userId);
-  req.user = payload;
+  req.user = { ...payload, status: user.status, plan: user.plan };
   req.workspaceId = workspace?.id;
   next();
 }
@@ -32,6 +38,20 @@ function checkLimit(limitType) {
           return res.status(429).json({ error: `Лимит генераций (${limits.generationsPerMonth}/мес) исчерпан` });
         }
       }
+
+      // FIX #6: Проверка лимита постов в день
+      if (limitType === "post") {
+        const today = new Date().toISOString().slice(0, 10);
+        const r = await pool.query(
+          "SELECT COUNT(*) FROM posts WHERE workspace_id=$1 AND created_at::date=$2",
+          [req.workspaceId, today]
+        );
+        const count = parseInt(r.rows[0].count, 10);
+        if (count >= limits.postsPerDay) {
+          return res.status(429).json({ error: `Лимит постов (${limits.postsPerDay}/день) исчерпан` });
+        }
+      }
+
       next();
     } catch (err) {
       next(err);
