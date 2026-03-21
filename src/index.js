@@ -71,6 +71,41 @@ app.use("/auth",  require("./routes/auth"));
 app.use("/api",   require("./routes/api"));
 app.use("/admin", require("./routes/admin"));
 
+// ─── THREADS OAUTH CALLBACK ───────────────────────────────────────────────────
+app.get("/auth/threads/callback", async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.send("<h2>❌ Код не найден</h2>");
+  try {
+    const fetch = require("node-fetch");
+    const params = new URLSearchParams({
+      client_id: "925519976744188",
+      client_secret: process.env.THREADS_APP_SECRET || "",
+      grant_type: "authorization_code",
+      redirect_uri: "https://backend-production-49e4.up.railway.app/auth/threads/callback",
+      code,
+    });
+    const r = await fetch("https://graph.threads.net/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+    const data = await r.json();
+    if (data.error) return res.send(`<h2>❌ ${data.error.message}</h2>`);
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Threads Token</title>
+      <style>body{font-family:monospace;padding:32px;background:#0d1117;color:#e6edf3}
+      .box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin:12px 0}
+      h2{color:#00d4aa}.val{word-break:break-all;color:#79c0ff;margin-top:8px}</style></head>
+      <body><h2>✅ Токен получен!</h2>
+      <div class="box"><b>Threads User ID:</b><div class="val">${data.user_id}</div></div>
+      <div class="box"><b>Access Token:</b><div class="val">${data.access_token}</div></div>
+      <p>Скопируй оба значения и добавь аккаунт в SellForce → Аккаунты → + Добавить</p>
+      </body></html>`);
+  } catch (err) {
+    res.send(`<h2>❌ Ошибка: ${err.message}</h2>`);
+  }
+});
+
+
 // ─── ERROR HANDLER ────────────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
   console.error("Unhandled error:", err.message);
