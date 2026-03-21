@@ -89,6 +89,14 @@ async function initDB() {
       );
     `);
     console.log("✅ БД: таблицы готовы");
+
+    // Добавляем новые колонки аналитики (IF NOT EXISTS — безопасно для существующей БД)
+    await client.query(`
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS tg_message_id TEXT;
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS threads_post_id TEXT;
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS metrics JSONB DEFAULT '{}';
+    `);
+
   } finally {
     client.release();
   }
@@ -214,6 +222,12 @@ const Posts = {
     pool.query("UPDATE posts SET status='published',published_at=NOW(),updated_at=NOW() WHERE id=$1", [id]),
   markFailed: (id, errorLog) =>
     pool.query("UPDATE posts SET status='failed',error_log=$2,updated_at=NOW() WHERE id=$1", [id, errorLog]),
+  // Сохранить ID сообщений из соцсетей после публикации
+  saveMessageIds: (id, tgMessageId, threadsPostId) =>
+    pool.query(
+      "UPDATE posts SET tg_message_id=COALESCE($2,tg_message_id), threads_post_id=COALESCE($3,threads_post_id), updated_at=NOW() WHERE id=$1",
+      [id, tgMessageId || null, threadsPostId || null]
+    ),
   delete: (id, workspaceId) =>
     pool.query("DELETE FROM posts WHERE id=$1 AND workspace_id=$2", [id, workspaceId]),
 };

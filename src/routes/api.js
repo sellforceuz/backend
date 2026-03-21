@@ -174,4 +174,28 @@ router.get("/logs", async (req, res) => {
   }
 });
 
+// GET /api/posts/stats — аналитика: последние 50 постов с ID и метриками
+router.get("/posts/stats", async (req, res) => {
+  try {
+    const { pool } = require("../db");
+    const r = await pool.query(`
+      SELECT
+        p.id, p.text, p.status, p.platforms,
+        p.tg_message_id, p.threads_post_id, p.metrics,
+        p.scheduled_at, p.published_at, p.error_log, p.created_at,
+        a.handle, a.name AS account_name, a.platform AS account_platform,
+        a.color, a.icon
+      FROM posts p
+      JOIN accounts a ON a.id = p.account_id
+      WHERE p.workspace_id = $1
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `, [req.workspaceId]);
+    res.json({ posts: r.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

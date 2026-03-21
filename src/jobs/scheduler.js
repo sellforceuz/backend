@@ -1,6 +1,6 @@
 // src/jobs/scheduler.js — планировщик публикаций
 const cron = require("node-cron");
-const { Posts, Log, Usage } = require("../db");
+const { Posts, Log, Usage, pool } = require("../db");
 const telegram = require("../services/telegram");
 const threads  = require("../services/threads");
 
@@ -13,19 +13,27 @@ async function publishPost(post) {
     : JSON.parse(post.platforms || '["telegram"]');
 
   const wid = post.workspace_id;
-  let success = false;
+
+  // Отслеживаем результаты по каждой платформе + их IDs
+  const results  = { success: [], failed: [] };
+  let tgMessageId    = null;
+  let threadsPostId  = null;
 
   for (const platform of platforms) {
     try {
       if (platform === "telegram" && post.channel_id) {
-        await telegram.sendMessage(post.channel_id, post.text);
+        const result = await telegram.sendMessage(post.channel_id, post.text);
+        // Сохраняем ID сообщения из Telegram для аналитики
+        tgMessageId = result?.message_id ? String(result.message_id) : null;
         await Log.add(wid, "publish_success", "telegram", `Пост #${post.id} → ${post.handle}`);
-        success = true;
+        results.success.push(platform);
 
       } else if (platform === "threads" && post.token && post.threads_user_id) {
-        await threads.publishPost(post.threads_user_id, post.token, post.text);
+        const result = await threads.publishPost(post.threads_user_id, post.token, post.text);
+        // Сохраняем ID поста из Threads для аналитики
+        threadsPostId = result?.post_id ? String(result.post_id) : null;
         await Log.add(wid, "publish_success", "threads", `Пост #${post.id} → ${post.handle}`);
-        success = true;
+        results.success.push(platform);
 
       } else {
         await Log.add(wid, "publish_skip", platform, `Пост #${post.id}: нет токена/channel_id`);
@@ -34,18 +42,40 @@ async function publishPost(post) {
       await delay(1000);
     } catch (err) {
       // Логирование ошибки сохранено
-      await Log.add(wid, "publish_fail", platform, `Пост #${post.id}: ${err.message}`);
+      results.failed.push(platform);
+      await Log.add(wid, "publish_fail", platform, `Пост #${post.id} [${platform}]: ${err.message}`);
       console.error(`❌ [${platform}] post #${post.id}:`, err.message);
       await delay(2000);
     }
   }
 
-  if (success) {
+  // Сохраняем полученные IDs в БД (если есть)
+  if (tgMessageId || threadsPostId) {
+    await Posts.saveMessageIds(post.id, tgMessageId, threadsPostId);
+  }
+
+  // Статус зависит от комбинации успехов и ошибок
+  if (results.success.length > 0 && results.failed.length > 0) {
+    // Частичный успех — хотя бы одна платформа упала
+    await pool.query(
+      "UPDATE posts SET status='partially_failed', error_log=$2, updated_at=NOW() WHERE id=$1",
+      [post.id, `Ошибка на платформах: ${results.failed.join(", ")}`]
+    );
+    await Usage.increment(wid, "posts_sent");
+    console.log(`⚠️ Пост #${post.id} опубликован частично (упало: ${results.failed.join(", ")})`);
+
+  } else if (results.success.length > 0) {
+    // Полный успех
     await Posts.markPublished(post.id);
     await Usage.increment(wid, "posts_sent");
     console.log(`✅ Пост #${post.id} опубликован`);
+
   } else {
-    await Posts.markFailed(post.id, "Нет доступных платформ или ошибка публикации");
+    // Полная ошибка
+    await Posts.markFailed(
+      post.id,
+      `Нет доступных платформ или ошибка публикации (упали: ${results.failed.join(", ")})`
+    );
   }
 }
 
@@ -60,7 +90,7 @@ function startScheduler() {
       if (due.length > 0) {
         console.log(`📤 Публикуем ${due.length} пост(ов)`);
 
-        // FIX #5: Батчевая обработка по 5 параллельно вместо поочерёдной
+        // Батчевая обработка по 5 параллельно
         const BATCH_SIZE = 5;
         for (let i = 0; i < due.length; i += BATCH_SIZE) {
           const batch = due.slice(i, i + BATCH_SIZE);

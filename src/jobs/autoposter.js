@@ -144,18 +144,58 @@ async function runAutoPosting() {
   const activeChannels = CHANNELS.filter(c => c.active);
   console.log(`[AutoPoster] 🚀 Запуск для ${activeChannels.length} каналов`);
 
+  let consecutiveQuotaErrors = 0; // FIX: счётчик подряд идущих 429
+
   for (const channel of activeChannels) {
+    // FIX: Если 3 подряд — прекращаем всю джобу
+    if (consecutiveQuotaErrors >= 3) {
+      const msg = "Критическая ошибка лимитов AI, автопостинг приостановлен";
+      console.error(`[AutoPoster] ❌ ${msg}`);
+      try {
+        await db.query(
+          `INSERT INTO activity_log (user_id, type, message, platform)
+           VALUES (1, 'auto_error', $1, 'system')`,
+          [msg]
+        );
+      } catch (_) {}
+      break;
+    }
+
     try {
       const topic = pickTopic(channel);
       console.log(`[AutoPoster] Генерирую пост для ${channel.handle}: "${topic}"`);
 
       const text = await generatePost(channel, topic);
+
+      // Успешная генерация — сбрасываем счётчик
+      consecutiveQuotaErrors = 0;
+
       await publishToChannel(channel, text);
 
-      // Пауза между публикациями чтобы не превысить лимиты Telegram
+      // Пауза между публикациями — защита от лимитов Telegram
       await new Promise(r => setTimeout(r, 3000));
+
     } catch (err) {
       console.error(`[AutoPoster] ❌ Ошибка для ${channel.handle}:`, err.message);
+
+      // FIX: Определяем — это 429 / quota exceeded?
+      const is429 = err.message.toLowerCase().includes("429") ||
+                    err.message.toLowerCase().includes("quota") ||
+                    err.message.toLowerCase().includes("too many") ||
+                    err.message.toLowerCase().includes("rate limit") ||
+                    err.message.toLowerCase().includes("таймаут");
+
+      if (is429) {
+        consecutiveQuotaErrors++;
+        // Пауза 30–60 секунд перед следующим каналом
+        const pauseSec = 30 + Math.floor(Math.random() * 30);
+        console.log(`[AutoPoster] ⏳ Пауза ${pauseSec}с из-за лимитов AI (ошибка ${consecutiveQuotaErrors}/3)`);
+        await new Promise(r => setTimeout(r, pauseSec * 1000));
+      } else {
+        // Обычная ошибка — короткая пауза и идём к следующему каналу
+        consecutiveQuotaErrors = 0;
+        await new Promise(r => setTimeout(r, 3000));
+      }
     }
   }
 }

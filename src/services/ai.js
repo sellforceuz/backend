@@ -57,6 +57,10 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
   if (!text) throw new Error("Gemini вернул пустой ответ");
+
+  // FIX: Защита от некачественной генерации — слишком короткий ответ бесполезен
+  if (text.length < 30) throw new Error("Некачественная генерация AI: ответ слишком короткий");
+
   return text;
 }
 
