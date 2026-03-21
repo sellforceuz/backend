@@ -86,16 +86,19 @@ app.use(express.json({ limit: "1mb" }));
 // ─── HEALTH CHECK (отвечает сразу — до инициализации БД) ─────────────────────
 app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
-// ─── THREADS OAUTH CALLBACK (must be before /auth router) ────────────────────────────────
+// ─── THREADS OAUTH CALLBACK (must be before /auth router) ─────────────────────
 app.get("/auth/threads/callback", async (req, res) => {
   console.log("[Threads OAuth] callback hit, code:", req.query.code ? "present" : "missing");
   const { code } = req.query;
   if (!code) return res.send("<h2>❌ Код не найден</h2>");
   try {
     const fetch = require("node-fetch");
-    const params = new URLSearchParams({
-      client_id: "925519976744188",
-      client_secret: process.env.THREADS_APP_SECRET || "",
+    const appId = process.env.THREADS_APP_ID || "925519976744188";
+    const appSecret = process.env.THREADS_APP_SECRET || "";
+    console.log("[Threads OAuth] client_id:", appId, "secret len:", appSecret.length);
+    const body = new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
       grant_type: "authorization_code",
       redirect_uri: "https://backend-production-49e4.up.railway.app/auth/threads/callback",
       code,
@@ -103,11 +106,15 @@ app.get("/auth/threads/callback", async (req, res) => {
     const r = await fetch("https://graph.threads.net/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
+      body: body.toString(),
     });
     const data = await r.json();
-    console.log("[Threads OAuth] response:", JSON.stringify(data).slice(0, 200));
-    if (data.error) return res.send(`<h2>❌ ${data.error.message}</h2><pre>${JSON.stringify(data,null,2)}</pre>`);
+    console.log("[Threads OAuth] response:", JSON.stringify(data).slice(0, 300));
+    if (data.error) return res.send(`
+      <h2>❌ ${data.error.message}</h2>
+      <p>client_id: ${appId} | secret length: ${appSecret.length}</p>
+      <pre>${JSON.stringify(data, null, 2)}</pre>
+    `);
     res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Threads Token</title>
       <style>body{font-family:monospace;padding:32px;background:#0d1117;color:#e6edf3}
       .box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin:12px 0}
@@ -121,6 +128,7 @@ app.get("/auth/threads/callback", async (req, res) => {
     res.send(`<h2>❌ Ошибка: ${err.message}</h2>`);
   }
 });
+
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 try { app.use("/auth",  require("./routes/auth")); console.log("[Startup] ✅ auth routes"); }
