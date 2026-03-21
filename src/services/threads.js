@@ -55,10 +55,10 @@ async function refreshLongLivedToken(longToken) {
   return { access_token: data.access_token, expires_at: expiresAt };
 }
 
-// Верифицировать токен — получаем профиль пользователя
+// Верифицировать токен — получаем профиль через /me (стандартный endpoint)
 async function verifyThreadsToken(userId, token) {
   const res = await fetchWithTimeout(
-    `${BASE}/${userId}?fields=id,username,threads_profile_picture_url&access_token=${token}`,
+    `${BASE}/me?fields=id,username,threads_profile_picture_url&access_token=${token}`,
     {},
     10000
   );
