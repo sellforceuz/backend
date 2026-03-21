@@ -70,24 +70,34 @@ async function verifyThreadsToken(userId, token) {
 async function publishPost(userId, token, text) {
   if (!token || !userId) throw new Error("Нет токена или userId для Threads");
 
-  // Шаг 1: Создать черновик
-  const containerRes = await fetchWithTimeout(`${BASE}/${userId}/threads`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ media_type: "TEXT", text, access_token: token }),
+  // Шаг 1: Создать черновик (Threads API требует query params, не JSON body)
+  const containerParams = new URLSearchParams({
+    media_type: "TEXT",
+    text,
+    access_token: token,
   });
+  const containerRes = await fetchWithTimeout(
+    `${BASE}/${userId}/threads`,
+    { method: "POST", body: containerParams },
+    12000
+  );
   const container = await containerRes.json();
   if (container.error) throw new Error(`Threads container: ${container.error.message}`);
+  if (!container.id) throw new Error("Threads: не получен ID контейнера");
 
-  // Небольшая пауза (Threads рекомендует ~2 сек для TEXT)
+  // Пауза 2 сек (Threads рекомендует перед публикацией)
   await new Promise(r => setTimeout(r, 2000));
 
   // Шаг 2: Опубликовать
-  const publishRes = await fetchWithTimeout(`${BASE}/${userId}/threads_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ creation_id: container.id, access_token: token }),
+  const publishParams = new URLSearchParams({
+    creation_id: container.id,
+    access_token: token,
   });
+  const publishRes = await fetchWithTimeout(
+    `${BASE}/${userId}/threads_publish`,
+    { method: "POST", body: publishParams },
+    12000
+  );
   const published = await publishRes.json();
   if (published.error) throw new Error(`Threads publish: ${published.error.message}`);
 
