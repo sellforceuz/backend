@@ -2,9 +2,47 @@
 require("dotenv").config();
 const express = require("express");
 const cors    = require("cors");
-const { initDB, Users, Workspaces } = require("./db");
+const { initDB, Users, Workspaces, Accounts } = require("./db");
 const { hashPassword } = require("./services/auth");
 const { startScheduler } = require("./jobs/scheduler");
+const { startAutoPoster } = require("./jobs/autoposter");
+
+// ─── SEED TELEGRAM ACCOUNTS ───────────────────────────────────────────────────
+async function seedAccounts() {
+  // Находим workspace admin-а
+  const admin = await Users.findByEmail(process.env.ADMIN_EMAIL || "amirmuxt12@gmail.com");
+  if (!admin) return;
+  const ws = await Workspaces.getByUserId(admin.id);
+  if (!ws) return;
+
+  const existing = await Accounts.getAll(ws.id);
+  const existingHandles = existing.map(a => a.handle);
+
+  const defaultAccounts = [
+    {
+      platform: "telegram", handle: "@sellforce_uz_academy",
+      name: "Sellforce Academy", icon: "🎓", color: "#00d4aa",
+      channel_id: "-1003711704639",
+    },
+    {
+      platform: "telegram", handle: "@sellforce_uz_crm",
+      name: "Sellforce / Систематизация бизнеса", icon: "📊", color: "#a78bfa",
+      channel_id: "-1003715663210",
+    },
+    {
+      platform: "telegram", handle: "@amir_sales_channel",
+      name: "ПроПродажи | Sales with Amir", icon: "🏆", color: "#f0c040",
+      channel_id: "-1002649517321",
+    },
+  ];
+
+  for (const acc of defaultAccounts) {
+    if (!existingHandles.includes(acc.handle)) {
+      await Accounts.create(ws.id, acc);
+      console.log("Seeded account: " + acc.handle);
+    }
+  }
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -73,7 +111,12 @@ async function start() {
     }
 
     startScheduler();
-    console.log("DB ready, scheduler started");
+    startAutoPoster();
+
+    // Засеять аккаунты Telegram-каналов если их ещё нет
+    await seedAccounts();
+
+    console.log("DB ready, scheduler and autoposter started");
   } catch (err) {
     console.error("Init error:", err.message);
   }
