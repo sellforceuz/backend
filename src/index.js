@@ -47,6 +47,9 @@ async function seedAccounts() {
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// Нужно для Railway/Heroku — они используют reverse proxy
+app.set("trust proxy", 1);
+
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.FRONTEND_URL || "*").split(",").map(s => s.trim());
 app.use(cors({
