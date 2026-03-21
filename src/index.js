@@ -22,60 +22,61 @@ app.use(cors({
 // ─── MIDDLEWARE ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));
 
+// ─── HEALTH CHECK (отвечает сразу — до инициализации БД) ─────────────────────
+app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 app.use("/auth",  require("./routes/auth"));
 app.use("/api",   require("./routes/api"));
 app.use("/admin", require("./routes/admin"));
 
-// ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
-app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
-
 // ─── ERROR HANDLER ────────────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
-  console.error("❌", err.message);
+  console.error("Unhandled error:", err.message);
   res.status(500).json({ error: "Внутренняя ошибка сервера" });
 });
 
 // ─── START ────────────────────────────────────────────────────────────────────
 async function start() {
-  // Проверяем обязательные переменные
   if (!process.env.JWT_SECRET) {
-    console.error("❌ JWT_SECRET не задан! Добавь в .env");
+    console.error("JWT_SECRET не задан!");
     process.exit(1);
   }
   if (!process.env.DATABASE_URL) {
-    console.error("❌ DATABASE_URL не задан! Добавь в .env");
+    console.error("DATABASE_URL не задан!");
     process.exit(1);
   }
 
-  await initDB();
-
-  // Создать admin-аккаунт если не существует
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
-    const existing = await Users.findByEmail(process.env.ADMIN_EMAIL);
-    if (!existing) {
-      const passwordHash = await hashPassword(process.env.ADMIN_PASSWORD);
-      const admin = await Users.create({
-        email: process.env.ADMIN_EMAIL,
-        passwordHash,
-        name: "Admin",
-        role: "admin",
-        plan: "agency",
-      });
-      await Workspaces.create(admin.id, "Admin workspace");
-      console.log(`✅ Admin создан: ${process.env.ADMIN_EMAIL}`);
-    }
-  }
-
-  startScheduler();
-
-  app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`   Среда: ${process.env.NODE_ENV || "development"}`);
+  // Запускаем HTTP-сервер СРАЗУ — Railway healthcheck пройдёт без ожидания БД
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log("Server listening on port " + PORT);
   });
+
+  // Инициализируем БД и admin асинхронно
+  try {
+    await initDB();
+
+    if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+      const existing = await Users.findByEmail(process.env.ADMIN_EMAIL);
+      if (!existing) {
+        const passwordHash = await hashPassword(process.env.ADMIN_PASSWORD);
+        const admin = await Users.create({
+          email: process.env.ADMIN_EMAIL,
+          passwordHash,
+          name: "Admin",
+          role: "admin",
+          plan: "agency",
+        });
+        await Workspaces.create(admin.id, "Admin workspace");
+        console.log("Admin created: " + process.env.ADMIN_EMAIL);
+      }
+    }
+
+    startScheduler();
+    console.log("DB ready, scheduler started");
+  } catch (err) {
+    console.error("Init error:", err.message);
+  }
 }
 
-start().catch(err => {
-  console.error("❌ Ошибка запуска:", err);
-  process.exit(1);
-});
+start();
