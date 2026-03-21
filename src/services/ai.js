@@ -1,27 +1,21 @@
-// src/services/ai.js — AI генерация через Google Gemini
-const fetch = require("node-fetch");
-
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent";
-
-// FIX #2: Хелпер — fetch с таймаутом (AbortController)
-async function fetchWithTimeout(url, options, timeoutMs = 15000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err) {
-    if (err.name === "AbortError") throw new Error("Gemini: таймаут запроса (15 сек)");
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// src/services/ai.js — AI генерация через Google Gemini SDK
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 async function generatePost({ accountName, accountHandle, topic, tone, format, idea }) {
   const apiKey = process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GOOGLE_AI_KEY не задан в .env");
 
-  const prompt = `Ты — эксперт по контент-маркетингу для Threads и Telegram (рынок СНГ).
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  // Пробуем модели по приоритету
+  const models = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+  let lastError = null;
+
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+
+      const prompt = `Ты — эксперт по контент-маркетингу для Threads и Telegram (рынок СНГ).
 
 Аккаунт: "${accountName}" (${accountHandle || ""})
 Тема: "${topic}"
@@ -39,29 +33,23 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 
 Верни ТОЛЬКО текст поста, без пояснений.`;
 
-  const res = await fetchWithTimeout(
-    `${GEMINI_URL}?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
-      }),
-    },
-    15000 // 15 секунд
-  );
+      const result = await model.generateContent(prompt);
+      const text = result.response.text()?.trim();
 
-  const data = await res.json();
-  if (data.error) throw new Error(`Gemini: ${data.error.message}`);
+      if (!text || text.length < 30) throw new Error("Пустой ответ от AI");
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) throw new Error("Gemini вернул пустой ответ");
+      console.log(`[AI] Успешно сгенерировано через ${modelName}`);
+      return text;
 
-  // FIX: Защита от некачественной генерации — слишком короткий ответ бесполезен
-  if (text.length < 30) throw new Error("Некачественная генерация AI: ответ слишком короткий");
+    } catch (err) {
+      console.warn(`[AI] Модель ${modelName} не сработала: ${err.message}`);
+      lastError = err;
+      // Если это не quota ошибка — пробуем следующую модель
+      // Если quota — тоже пробуем следующую
+    }
+  }
 
-  return text;
+  throw new Error(`Gemini: ${lastError?.message || "все модели недоступны"}`);
 }
 
 module.exports = { generatePost };
