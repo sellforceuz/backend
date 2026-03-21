@@ -1,11 +1,30 @@
 // src/index.js — точка входа сервера
 require("dotenv").config();
+console.log("[Startup] Loading modules...");
 const express = require("express");
 const cors    = require("cors");
-const { initDB, Users, Workspaces, Accounts } = require("./db");
-const { hashPassword } = require("./services/auth");
-const { startScheduler } = require("./jobs/scheduler");
-const { startAutoPoster } = require("./jobs/autoposter");
+
+let initDB, Users, Workspaces, Accounts, startScheduler, startAutoPoster, hashPassword;
+try {
+  ({ initDB, Users, Workspaces, Accounts } = require("./db"));
+  console.log("[Startup] ✅ db.js loaded");
+} catch (e) { console.error("[Startup] ❌ db.js failed:", e.message); process.exit(1); }
+
+try {
+  ({ hashPassword } = require("./services/auth"));
+  console.log("[Startup] ✅ services/auth loaded");
+} catch (e) { console.error("[Startup] ❌ services/auth failed:", e.message); process.exit(1); }
+
+try {
+  ({ startScheduler } = require("./jobs/scheduler"));
+  console.log("[Startup] ✅ scheduler.js loaded");
+} catch (e) { console.error("[Startup] ❌ scheduler.js failed:", e.message); process.exit(1); }
+
+try {
+  ({ startAutoPoster } = require("./jobs/autoposter"));
+  console.log("[Startup] ✅ autoposter.js loaded");
+} catch (e) { console.error("[Startup] ❌ autoposter.js failed:", e.message); process.exit(1); }
+
 
 // ─── SEED TELEGRAM ACCOUNTS ───────────────────────────────────────────────────
 async function seedAccounts() {
@@ -67,9 +86,14 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-app.use("/auth",  require("./routes/auth"));
-app.use("/api",   require("./routes/api"));
-app.use("/admin", require("./routes/admin"));
+try { app.use("/auth",  require("./routes/auth")); console.log("[Startup] ✅ auth routes"); }
+catch (e) { console.error("[Startup] ❌ routes/auth failed:", e.message); }
+
+try { app.use("/api",   require("./routes/api")); console.log("[Startup] ✅ api routes"); }
+catch (e) { console.error("[Startup] ❌ routes/api failed:", e.message); }
+
+try { app.use("/admin", require("./routes/admin")); console.log("[Startup] ✅ admin routes"); }
+catch (e) { console.error("[Startup] ❌ routes/admin failed:", e.message); }
 
 // ─── THREADS OAUTH CALLBACK ───────────────────────────────────────────────────
 app.get("/auth/threads/callback", async (req, res) => {
