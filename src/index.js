@@ -86,6 +86,16 @@ app.use(express.json({ limit: "1mb" }));
 // ─── HEALTH CHECK (отвечает сразу — до инициализации БД) ─────────────────────
 app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
+// ─── THREADS OAUTH START ──────────────────────────────────────────────────────
+app.get("/auth/threads/start", (req, res) => {
+  const appId = process.env.THREADS_APP_ID || "925519976744188";
+  const redirectUri = "https://backend-production-49e4.up.railway.app/auth/threads/callback";
+  const scope = "threads_basic,threads_content_publish,threads_manage_insights";
+  const url = `https://www.threads.net/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=sellforce`;
+  console.log("[Threads OAuth] Redirecting to:", url);
+  res.redirect(url);
+});
+
 // ─── THREADS OAUTH CALLBACK (must be before /auth router) ─────────────────────
 app.get("/auth/threads/callback", async (req, res) => {
   console.log("[Threads OAuth] callback hit, code:", req.query.code ? "present" : "missing");
