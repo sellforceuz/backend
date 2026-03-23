@@ -42,10 +42,12 @@ async function publishPost(post) {
 
       await delay(1000);
     } catch (err) {
-      // Логирование ошибки сохранено
       results.failed.push(platform);
-      await Log.add(wid, "publish_fail", platform, `Пост #${post.id} [${platform}]: ${err.message}`);
-      console.error(`❌ [${platform}] post #${post.id}:`, err.message);
+      // Помечаем постоянные ошибки (не нужно повторять)
+      if (err.permanent) results.permanentFail = true;
+      const errMsg = err.message || "неизвестная ошибка";
+      await Log.add(wid, "publish_fail", platform, `Пост #${post.id} [${platform}]: ${errMsg}`);
+      console.error(`❌ [${platform}] post #${post.id}:`, errMsg);
       await delay(2000);
     }
   }
@@ -72,17 +74,29 @@ async function publishPost(post) {
     console.log(`✅ Пост #${post.id} опубликован`);
 
   } else {
-    // Полный провал — применяем retry logic (макс 3 попытки, через 15 мин)
+    // Полный провал
+    // Если ошибка постоянная (токен умер, нет прав) — не повторять!
+    if (results.permanentFail) {
+      await Posts.markFailed(
+        post.id,
+        `Постоянная ошибка (code 100/190): токен Threads истёк или недостаточно прав. Обнови токен в настройках.`
+      );
+      console.log(`🔴 Пост #${post.id} — постоянная ошибка, повтор отключён`);
+      return;
+    }
+
+    // Временная ошибка — экспоненциальный бэкбоф (1ч, 2ч, 4ч)
     const retryCount = (post.retry_count || 0) + 1;
+    const backoffHours = Math.pow(2, retryCount - 1); // 1, 2, 4 часа
     if (retryCount <= 3) {
-      const retryAt = new Date(Date.now() + 15 * 60 * 1000); // +15 минут
+      const retryAt = new Date(Date.now() + backoffHours * 60 * 60 * 1000);
       await pool.query(
         `UPDATE posts SET status='scheduled', retry_count=$2, scheduled_at=$3,
          error_log=$4, updated_at=NOW() WHERE id=$1`,
         [post.id, retryCount, retryAt,
-         `Попытка ${retryCount}/3: ${results.failed.join(", ")} (следующая в ${retryAt.toLocaleTimeString("ru")})`]
+         `Попытка ${retryCount}/3 (через ${backoffHours}ч): ${results.failed.join(", ")}`]
       );
-      console.log(`🔄 Пост #${post.id} — повтор #${retryCount}/3 через 15 мин`);
+      console.log(`🔄 Пост #${post.id} — повтор #${retryCount}/3 через ${backoffHours}ч`);
     } else {
       await Posts.markFailed(
         post.id,
@@ -185,6 +199,7 @@ function startScheduler() {
         WHERE p.status IN ('failed', 'partially_failed')
           AND p.created_at >= NOW() - INTERVAL '24 hours'
           AND COALESCE(p.retry_count, 0) < 3
+          AND (p.error_log IS NULL OR p.error_log NOT LIKE '%code 100%' AND p.error_log NOT LIKE '%code 190%' AND p.error_log NOT LIKE '%постоянная%')
         LIMIT 20
       `);
 

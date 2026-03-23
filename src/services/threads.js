@@ -3,6 +3,18 @@ const fetch = require("node-fetch");
 
 const BASE = "https://graph.threads.net/v1.0";
 
+// Постоянная ошибка — повтор бесполезен (код 100=неверные права/токен, 190=истёк, 200=недостаточно прав)
+class ThreadsPermanentError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.permanent = true;
+    this.metaCode = code;
+  }
+}
+
+// Коды META которые не надо повторять (токен умер / нет прав)
+const PERMANENT_CODES = new Set([100, 190, 200, 10, 803]);
+
 // FIX: AbortController-based fetch с таймаутом
 async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
   const controller = new AbortController();
@@ -91,7 +103,10 @@ async function publishPost(userId, token, text) {
 
   if (container.error) {
     console.error(`[Threads] ❌ Container error:`, JSON.stringify(container.error));
-    throw new Error(`Threads container: ${container.error.message} (code: ${container.error.code})`);
+    const code = container.error.code;
+    const msg = `Threads container: ${container.error.message} (code: ${code})`;
+    if (PERMANENT_CODES.has(code)) throw new ThreadsPermanentError(msg, code);
+    throw new Error(msg);
   }
   if (!container.id) {
     console.error(`[Threads] ❌ No container ID in response:`, JSON.stringify(container));
