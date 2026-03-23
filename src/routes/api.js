@@ -243,6 +243,19 @@ router.post("/posts/publish-now", async (req, res) => {
   }
 });
 
+// DELETE /api/posts/failed — удалить все провальные посты (ДОЛЖНО БЫТЬ ДО /posts/:id !)
+router.delete("/posts/failed", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `DELETE FROM posts WHERE workspace_id=$1 AND status IN ('failed','partially_failed') RETURNING id`,
+      [req.workspaceId]
+    );
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/posts/:id
 router.delete("/posts/:id", async (req, res) => {
   try {
@@ -256,7 +269,7 @@ router.delete("/posts/:id", async (req, res) => {
 // POST /api/posts/:id/retry — повторить публикацию провального поста
 router.post("/posts/:id/retry", async (req, res) => {
   try {
-    const retryAt = new Date(Date.now() + 60 * 1000); // через 1 минуту
+    const retryAt = new Date(Date.now() + 60 * 1000);
     await pool.query(
       `UPDATE posts SET status='scheduled', retry_count=0, scheduled_at=$2,
        error_log=NULL, updated_at=NOW()
@@ -264,19 +277,6 @@ router.post("/posts/:id/retry", async (req, res) => {
       [req.params.id, retryAt, req.workspaceId]
     );
     res.json({ ok: true, retryAt });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE /api/posts/failed — удалить все провальные посты
-router.delete("/posts/failed", async (req, res) => {
-  try {
-    const r = await pool.query(
-      `DELETE FROM posts WHERE workspace_id=$1 AND status IN ('failed','partially_failed') RETURNING id`,
-      [req.workspaceId]
-    );
-    res.json({ ok: true, deleted: r.rowCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
