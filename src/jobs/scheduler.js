@@ -173,6 +173,43 @@ function startScheduler() {
       console.error("[Autopilot] ❌ Ошибка cron:", err.message);
     }
   }, { timezone: "UTC" });
+
+  // ─── АВТО-РЕТРАЙ: каждый час пробуем повторить упавшие посты ────────────────
+  cron.schedule("0 * * * *", async () => {
+    console.log("[Retry] 🔄 Проверка упавших постов для авто-повтора...");
+    try {
+      const { rows } = await pool.query(`
+        SELECT p.*, a.token, a.channel_id, a.threads_user_id, a.handle, a.platform as acc_platform
+        FROM posts p
+        JOIN accounts a ON a.id = p.account_id
+        WHERE p.status IN ('failed', 'partially_failed')
+          AND p.created_at >= NOW() - INTERVAL '24 hours'
+          AND COALESCE(p.retry_count, 0) < 3
+        LIMIT 20
+      `);
+
+      if (!rows.length) {
+        console.log("[Retry] Нет постов для авто-повтора");
+        return;
+      }
+
+      console.log(`[Retry] Найдено ${rows.length} постов для повтора`);
+      const retryAt = new Date(Date.now() + 5 * 60 * 1000); // +5 минут
+
+      for (const post of rows) {
+        const newCount = (post.retry_count || 0) + 1;
+        await pool.query(
+          `UPDATE posts SET status='scheduled', retry_count=$2, scheduled_at=$3,
+           error_log=CONCAT(error_log, ' | Авто-повтор #', $2), updated_at=NOW()
+           WHERE id=$1`,
+          [post.id, newCount, retryAt]
+        );
+        console.log(`[Retry] Пост #${post.id} → повтор #${newCount}/3 в ${retryAt.toISOString()}`);
+      }
+    } catch (err) {
+      console.error("[Retry] ❌ Ошибка:", err.message);
+    }
+  }, { timezone: "UTC" });
 }
 
 module.exports = { startScheduler };

@@ -269,6 +269,19 @@ router.post("/posts/:id/retry", async (req, res) => {
   }
 });
 
+// DELETE /api/posts/failed — удалить все провальные посты
+router.delete("/posts/failed", async (req, res) => {
+  try {
+    const r = await pool.query(
+      `DELETE FROM posts WHERE workspace_id=$1 AND status IN ('failed','partially_failed') RETURNING id`,
+      [req.workspaceId]
+    );
+    res.json({ ok: true, deleted: r.rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/generate — AI генерация поста
 router.post("/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
   try {
