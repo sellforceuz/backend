@@ -221,6 +221,21 @@ function startScheduler() {
         );
         console.log(`[Retry] Пост #${post.id} → повтор #${newCount}/3 в ${retryAt.toISOString()}`);
       }
+
+      // ─── Очистка "осиротевших" постов (аккаунт удалён) ──────────────────────
+      const orphaned = await pool.query(`
+        UPDATE posts SET status='failed',
+          error_log='Аккаунт удалён — обнови аккаунт и создай новые посты',
+          updated_at=NOW()
+        FROM accounts a
+        WHERE posts.account_id = a.id
+          AND a.is_active = false
+          AND posts.status = 'scheduled'
+        RETURNING posts.id
+      `);
+      if (orphaned.rowCount > 0) {
+        console.log(`[Retry] ♻️ Помечено ${orphaned.rowCount} постов без активного аккаунта`);
+      }
     } catch (err) {
       console.error("[Retry] ❌ Ошибка:", err.message);
     }

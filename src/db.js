@@ -208,10 +208,13 @@ const Accounts = {
 const Posts = {
   getDue: async () => {
     const r = await pool.query(`
-      SELECT p.*, a.token, a.channel_id, a.threads_user_id, a.handle, a.platform as acc_platform
+      SELECT p.*, a.token, a.channel_id, a.threads_user_id, a.handle,
+             a.platform as acc_platform, a.is_active as acc_active
       FROM posts p
       JOIN accounts a ON a.id=p.account_id
-      WHERE p.status='scheduled' AND p.scheduled_at <= NOW()
+      WHERE p.status='scheduled'
+        AND p.scheduled_at <= NOW()
+        AND a.is_active = true
       ORDER BY p.scheduled_at ASC
       LIMIT 50
     `);
