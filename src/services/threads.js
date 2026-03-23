@@ -82,43 +82,56 @@ async function verifyThreadsToken(userId, token) {
 async function publishPost(userId, token, text) {
   if (!token || !userId) throw new Error("Нет токена или userId для Threads");
 
-  // Очистка текста — убираем лишние переносы и пробелы (Meta API чувствителен)
-  const cleanText = text
+  // Очистка текста
+  const cleanText = (text || "")
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Шаг 1: Создать черновик (Threads API требует query params, не JSON body)
+  // Валидация — текст обязателен для TEXT постов
+  if (!cleanText) throw new Error("Threads: текст поста не может быть пустым");
+
+  console.log(`[Threads] 🚀 Публикуем для User ID: ${userId} | Токен: ...${token.slice(-8)} | Текст: ${cleanText.slice(0,50)}...`);
+
+  // Шаг 1: Создаём НОВЫЙ контейнер (всегда с нуля, без кэша)
   const containerParams = new URLSearchParams({
     media_type: "TEXT",
     text: cleanText,
     access_token: token,
   });
+  const containerUrl = `${BASE}/${userId}/threads`;
+  console.log(`[Threads] 📦 Создаём контейнер: POST ${containerUrl}`);
+
   const containerRes = await fetchWithTimeout(
-    `${BASE}/${userId}/threads`,
+    containerUrl,
     { method: "POST", body: containerParams },
     12000
   );
   const container = await containerRes.json();
 
   if (container.error) {
-    console.error(`[Threads] ❌ Container error:`, JSON.stringify(container.error));
     const code = container.error.code;
+    console.error(`[Threads] ❌ Ошибка контейнера (code ${code}):`, container.error.message);
+    console.error(`[Threads] ℹ️  User ID ${userId} — это ID аккаунта, не контейнера`);
+    if (code === 100 || code === 190) {
+      console.error(`[Threads] ⚠️  Code ${code} = токен истёк или нет прав threads_content_publish`);
+    }
     const msg = `Threads container: ${container.error.message} (code: ${code})`;
     if (PERMANENT_CODES.has(code)) throw new ThreadsPermanentError(msg, code);
     throw new Error(msg);
   }
   if (!container.id) {
-    console.error(`[Threads] ❌ No container ID in response:`, JSON.stringify(container));
+    console.error(`[Threads] ❌ Контейнер создан но без ID. Ответ:`, JSON.stringify(container));
     throw new Error("Threads: не получен ID контейнера");
   }
 
-  console.log(`[Threads] ✅ Container created: ${container.id}`);
+  // container.id — это НОВЫЙ уникальный ContainerID (не UserID!)
+  console.log(`[Threads] ✅ Новый Container ID: ${container.id} (User ID: ${userId})`);
 
-  // Пауза 2 сек (Threads рекомендует перед публикацией)
+  // Пауза 2 сек (Threads требует перед publish)
   await new Promise(r => setTimeout(r, 2000));
 
-  // Шаг 2: Опубликовать
+  // Шаг 2: Публикуем по Container ID
   const publishParams = new URLSearchParams({
     creation_id: container.id,
     access_token: token,
@@ -131,11 +144,14 @@ async function publishPost(userId, token, text) {
   const published = await publishRes.json();
 
   if (published.error) {
-    console.error(`[Threads] ❌ Publish error:`, JSON.stringify(published.error));
-    throw new Error(`Threads publish: ${published.error.message} (code: ${published.error.code})`);
+    const code = published.error.code;
+    console.error(`[Threads] ❌ Ошибка публикации (code ${code}):`, published.error.message);
+    const msg = `Threads publish: ${published.error.message} (code: ${code})`;
+    if (PERMANENT_CODES.has(code)) throw new ThreadsPermanentError(msg, code);
+    throw new Error(msg);
   }
 
-  console.log(`[Threads] ✅ Published! Post ID: ${published.id}`);
+  console.log(`[Threads] 🎉 Опубликовано! Post ID: ${published.id} | Container был: ${container.id}`);
   return { post_id: published.id };
 }
 

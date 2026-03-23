@@ -104,6 +104,14 @@ async function initDB() {
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS daily_post_count INTEGER DEFAULT 5;
     `);
 
+    // Очистка устаревших threads_post_id у failed/scheduled постов
+    await client.query(`
+      UPDATE posts SET threads_post_id = NULL
+      WHERE status IN ('failed', 'scheduled', 'partially_failed')
+        AND threads_post_id IS NOT NULL
+    `);
+    console.log("[DB] ✅ Cleaned up stale threads_post_id on failed/scheduled posts");
+
   } finally {
     client.release();
   }
