@@ -189,7 +189,7 @@ app.get("/auth/threads/callback", async (req, res) => {
       // Обновить существующий
       await pool.query(
         `UPDATE accounts SET token=$1, token_expires_at=$2, is_active=true,
-         handle=$3, name=$4, updated_at=NOW()
+         handle=$3, name=$4
          WHERE id=$5`,
         [finalToken, expiresAt, `@${username}`, username, existingRes.rows[0].id]
       );
