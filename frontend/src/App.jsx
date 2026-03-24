@@ -422,10 +422,10 @@ function ScheduleView({ accounts, toast, user }) {
             <div>
               <label style={S.label}>Платформы</label>
               <div style={{ ...S.row, gap: 12 }}>
-                {["telegram", "threads"].map(p => (
+                {["telegram", "threads", "linkedin"].map(p => (
                   <label key={p} style={{ ...S.row, gap: 6, cursor: "pointer", fontSize: 13, color: "#e6edf3" }}>
                     <input type="checkbox" checked={platforms.includes(p)} onChange={e => setPlatforms(e.target.checked ? [...platforms, p] : platforms.filter(x => x !== p))} />
-                    {p === "telegram" ? "✈️ Telegram" : "🧵 Threads"}
+                    {p === "telegram" ? "✈️ Telegram" : p === "threads" ? "🧵 Threads" : "💼 LinkedIn"}
                   </label>
                 ))}
               </div>
