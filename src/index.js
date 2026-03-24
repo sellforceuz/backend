@@ -195,9 +195,9 @@ app.get("/auth/threads/callback", async (req, res) => {
       );
       console.log("[Threads OAuth] 🔄 Updated existing account:", username);
     } else {
-      // Создать новый
-      await Accounts.create({
-        workspace_id: workspaceId, platform: "threads",
+      // Создать новый (workspaceId отдельным параметром!)
+      await Accounts.create(workspaceId, {
+        platform: "threads",
         handle: `@${username}`, name: username,
         token: finalToken, threads_user_id: userId,
         icon: "🧵", color: "#000000",
