@@ -1,5 +1,5 @@
-# redeploy: 2026-03-24
 [build]
+  command = ""
   publish = "frontend/dist"
 
 [[headers]]
