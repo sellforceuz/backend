@@ -1104,12 +1104,12 @@ export default function App() {
   };
 
   return (
-    <div style={{ ...S.page, ...S.row, alignItflex- start" }}>
-  { toast.toast && <Toast key={toast.toast.ssage = { toast.toast.message } type={toast.toast.type} onClose={toast.clear} /> }
-  <Sidebar user={user} active={view} onNaview} onLogout = { handleLogout } />
-    <div style={{ flex: 1, padding: 32, minH "100vh", overflow: "auto" }}>
-      {views[view] || views.generator}
+    <div style={{ ...S.page, ...S.row, alignItems: "flex-start" }}>
+      {toast.toast && <Toast key={toast.toast.id} message={toast.toast.message} type={toast.toast.type} onClose={toast.clear} />}
+      <Sidebar user={user} active={view} onNav={setView} onLogout={handleLogout} />
+      <div style={{ flex: 1, padding: 32, minHeight: "100vh", overflow: "auto" }}>
+        {views[view] || views.generator}
+      </div>
     </div>
-    </div >
   );
-}
+}
