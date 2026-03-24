@@ -1,3 +1,4 @@
+// SellForce v2.1 - responsive + dark mode
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
