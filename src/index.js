@@ -87,55 +87,132 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // ─── THREADS OAUTH START ──────────────────────────────────────────────────────
+// Принимает ?state=<jwt> от фронтенда, передаёт в Meta OAuth как state
 app.get("/auth/threads/start", (req, res) => {
-  const appId = process.env.THREADS_APP_ID || "925519976744188";
-  const redirectUri = "https://backend-production-49e4.up.railway.app/auth/threads/callback";
-  const scope = "threads_basic,threads_content_publish,threads_manage_insights";
-  const url = `https://www.threads.net/oauth/authorize?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=sellforce`;
-  console.log("[Threads OAuth] Redirecting to:", url);
+  const appId      = process.env.THREADS_APP_ID || "925519976744188";
+  const backendUrl = process.env.BACKEND_URL || "https://backend-production-49e4.up.railway.app";
+  const redirectUri = `${backendUrl}/auth/threads/callback`;
+  const scope      = "threads_basic,threads_content_publish,threads_manage_insights";
+  const state      = req.query.state || "nosession"; // JWT от пользователя
+  const url = `https://www.threads.net/oauth/authorize?` + new URLSearchParams({
+    client_id: appId, redirect_uri: redirectUri,
+    scope, response_type: "code", state,
+  });
+  console.log("[Threads OAuth] 🔗 Starting OAuth for state:", state.slice(0, 20) + "...");
   res.redirect(url);
 });
 
-// ─── THREADS OAUTH CALLBACK (must be before /auth router) ─────────────────────
+// ─── THREADS OAUTH CALLBACK — АВТОСОХРАНЕНИЕ АККАУНТА ────────────────────────
 app.get("/auth/threads/callback", async (req, res) => {
-  console.log("[Threads OAuth] callback hit, code:", req.query.code ? "present" : "missing");
-  const { code } = req.query;
-  if (!code) return res.send("<h2>❌ Код не найден</h2>");
+  const FRONTEND_URL = process.env.FRONTEND_URL || "https://magnificent-crumble-ca6996.netlify.app";
+  const { code, state, error: oauthError } = req.query;
+
+  if (oauthError) {
+    console.error("[Threads OAuth] ❌ User denied:", oauthError);
+    return res.redirect(`${FRONTEND_URL}?threads_error=${encodeURIComponent(oauthError)}`);
+  }
+  if (!code) {
+    return res.redirect(`${FRONTEND_URL}?threads_error=no_code`);
+  }
+
   try {
-    const fetch = require("node-fetch");
-    const appId = process.env.THREADS_APP_ID || "925519976744188";
-    const appSecret = process.env.THREADS_APP_SECRET || "";
-    console.log("[Threads OAuth] client_id:", appId, "secret len:", appSecret.length);
-    const body = new URLSearchParams({
-      client_id: appId,
-      client_secret: appSecret,
-      grant_type: "authorization_code",
-      redirect_uri: "https://backend-production-49e4.up.railway.app/auth/threads/callback",
-      code,
-    });
-    const r = await fetch("https://graph.threads.net/oauth/access_token", {
+    const fetch      = require("node-fetch");
+    const { verifyAccessToken } = require("./services/auth");
+    const { Workspaces, Accounts, pool } = require("./db");
+    const { exchangeLongLivedToken } = require("./services/threads");
+
+    const appId      = process.env.THREADS_APP_ID || "925519976744188";
+    const appSecret  = process.env.THREADS_APP_SECRET || "";
+    const backendUrl = process.env.BACKEND_URL || "https://backend-production-49e4.up.railway.app";
+    const redirectUri = `${backendUrl}/auth/threads/callback`;
+
+    // Шаг 1: Получаем краткосрочный токен (1 час)
+    const tokenRes = await fetch("https://graph.threads.net/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
+      body: new URLSearchParams({ client_id: appId, client_secret: appSecret,
+        grant_type: "authorization_code", redirect_uri: redirectUri, code }).toString(),
     });
-    const data = await r.json();
-    console.log("[Threads OAuth] response:", JSON.stringify(data).slice(0, 300));
-    if (data.error) return res.send(`
-      <h2>❌ ${data.error.message}</h2>
-      <p>client_id: ${appId} | secret length: ${appSecret.length}</p>
-      <pre>${JSON.stringify(data, null, 2)}</pre>
-    `);
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Threads Token</title>
-      <style>body{font-family:monospace;padding:32px;background:#0d1117;color:#e6edf3}
-      .box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px;margin:12px 0}
-      h2{color:#00d4aa}.val{word-break:break-all;color:#79c0ff;margin-top:8px}</style></head>
-      <body><h2>✅ Токен получен!</h2>
-      <div class="box"><b>Threads User ID:</b><div class="val">${data.user_id}</div></div>
-      <div class="box"><b>Access Token:</b><div class="val">${data.access_token}</div></div>
-      <p>Скопируй оба значения и добавь аккаунт в SellForce</p></body></html>`);
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) throw new Error(`OAuth token: ${tokenData.error.message}`);
+
+    const shortToken = tokenData.access_token;
+    const userId     = String(tokenData.user_id);
+    console.log("[Threads OAuth] ✅ Short token for user:", userId);
+
+    // Шаг 2: Обмен на долгосрочный токен (60 дней)
+    let finalToken = shortToken;
+    let expiresAt  = null;
+    if (appSecret) {
+      const { access_token, expires_at } = await exchangeLongLivedToken(shortToken);
+      finalToken = access_token;
+      expiresAt  = expires_at;
+      console.log("[Threads OAuth] ✅ Long-lived token (expires:", expires_at, ")");
+    }
+
+    // Шаг 3: Получаем профиль пользователя
+    const profileRes = await fetch(
+      `https://graph.threads.net/v1.0/me?fields=id,username,threads_profile_picture_url&access_token=${finalToken}`
+    );
+    const profile = await profileRes.json();
+    const username = profile.username || `threads_${userId}`;
+    console.log("[Threads OAuth] 👤 Profile:", username, "(", userId, ")");
+
+    // Шаг 4: Определяем workspace из state (JWT)
+    let workspaceId = null;
+    const payload = state && state !== "nosession" ? verifyAccessToken(state) : null;
+    if (payload?.userId) {
+      const ws = await Workspaces.getByUserId(payload.userId);
+      workspaceId = ws?.id;
+    }
+
+    if (!workspaceId) {
+      // Fallback: ищем workspace по admin email
+      const adminEmail = process.env.ADMIN_EMAIL || "amirmuxt12@gmail.com";
+      const { Users } = require("./db");
+      const admin = await Users.findByEmail(adminEmail);
+      if (admin) {
+        const ws = await Workspaces.getByUserId(admin.id);
+        workspaceId = ws?.id;
+      }
+    }
+
+    if (!workspaceId) throw new Error("Не удалось определить workspace");
+
+    // Шаг 5: Сохраняем или обновляем аккаунт
+    const existingRes = await pool.query(
+      "SELECT id FROM accounts WHERE workspace_id=$1 AND platform='threads' AND threads_user_id=$2",
+      [workspaceId, userId]
+    );
+
+    if (existingRes.rows.length > 0) {
+      // Обновить существующий
+      await pool.query(
+        `UPDATE accounts SET token=$1, token_expires_at=$2, is_active=true,
+         handle=$3, name=$4, updated_at=NOW()
+         WHERE id=$5`,
+        [finalToken, expiresAt, `@${username}`, username, existingRes.rows[0].id]
+      );
+      console.log("[Threads OAuth] 🔄 Updated existing account:", username);
+    } else {
+      // Создать новый
+      await Accounts.create({
+        workspace_id: workspaceId, platform: "threads",
+        handle: `@${username}`, name: username,
+        token: finalToken, threads_user_id: userId,
+        icon: "🧵", color: "#000000",
+        token_expires_at: expiresAt,
+      });
+      console.log("[Threads OAuth] ✅ Created new account:", username);
+    }
+
+    // Редиректим на фронтенд с успехом
+    res.redirect(`${FRONTEND_URL}?threads_connected=1&username=${encodeURIComponent(username)}`);
+
   } catch (err) {
-    console.error("[Threads OAuth] error:", err.message);
-    res.send(`<h2>❌ Ошибка: ${err.message}</h2>`);
+    console.error("[Threads OAuth] ❌ Error:", err.message);
+    const FRONTEND_URL2 = process.env.FRONTEND_URL || "https://magnificent-crumble-ca6996.netlify.app";
+    res.redirect(`${FRONTEND_URL2}?threads_error=${encodeURIComponent(err.message)}`);
   }
 });
 
