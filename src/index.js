@@ -72,13 +72,15 @@ app.set("trust proxy", 1);
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.FRONTEND_URL || "*").split(",").map(s => s.trim());
-app.use(cors({
+const corsOptions = {
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) cb(null, true);
-    else cb(new Error("CORS blocked: " + origin));
+    else cb(null, false);
   },
-  credentials: true,
-}));
+  credentials: false,
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // ─── MIDDLEWARE ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));
