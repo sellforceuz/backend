@@ -3,6 +3,7 @@ const cron = require("node-cron");
 const { Posts, Log, Usage, pool } = require("../db");
 const telegram = require("../services/telegram");
 const threads  = require("../services/threads");
+const linkedin = require("../services/linkedin");
 const { updatePostMetrics } = require("../services/stats");
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
@@ -34,6 +35,12 @@ async function publishPost(post) {
         // Сохраняем ID поста из Threads для аналитики
         threadsPostId = result?.post_id ? String(result.post_id) : null;
         await Log.add(wid, "publish_success", "threads", `Пост #${post.id} → ${post.handle}`);
+        results.success.push(platform);
+
+      } else if (platform === "linkedin" && post.token && post.channel_id) {
+        // channel_id хранит LinkedIn person URN id
+        const result = await linkedin.publishPost(post.channel_id, post.token, post.text);
+        await Log.add(wid, "publish_success", "linkedin", `Пост #${post.id} → ${post.handle}`);
         results.success.push(platform);
 
       } else {

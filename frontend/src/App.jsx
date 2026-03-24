@@ -599,6 +599,15 @@ function AccountsView({ accounts, setAccounts, toast }) {
           >
             🧵 Подключить Threads через Meta
           </button>
+          <button
+            onClick={() => {
+              const token = localStorage.getItem("accessToken");
+              window.location.href = `${API_URL}/auth/linkedin/start?state=${encodeURIComponent(token)}`;
+            }}
+            style={{ ...S.btnGhost, fontSize: 12, padding: "10px 16px", borderColor: "#0077B5", color: "#0077B5", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            💼 Подключить LinkedIn
+          </button>
           <button onClick={() => setAdding(!adding)} style={S.btnPrimary}>+ Добавить вручную</button>
         </div>
       </div>
@@ -1029,7 +1038,7 @@ export default function App() {
     }).finally(() => setLoading(false));
   }, []);
 
-  // Обработка редиректа после Threads OAuth
+  // Обработка редиректа после Threads/LinkedIn OAuth
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("threads_connected")) {
@@ -1038,6 +1047,13 @@ export default function App() {
       window.history.replaceState({}, "", window.location.pathname);
     } else if (params.get("threads_error")) {
       setTimeout(() => toast.show(`❌ Ошибка: ${decodeURIComponent(params.get("threads_error"))}`, "error"), 800);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("linkedin_connected")) {
+      const username = params.get("username") || "LinkedIn";
+      setTimeout(() => toast.show(`✅ ${username} подключён через LinkedIn!`), 800);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("linkedin_error")) {
+      setTimeout(() => toast.show(`❌ LinkedIn: ${decodeURIComponent(params.get("linkedin_error"))}`, "error"), 800);
       window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);

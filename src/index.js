@@ -217,6 +217,92 @@ app.get("/auth/threads/callback", async (req, res) => {
 });
 
 
+// ─── LINKEDIN OAUTH START ─────────────────────────────────────────────────────
+app.get("/auth/linkedin/start", (req, res) => {
+  const clientId   = process.env.LINKEDIN_CLIENT_ID || "787o7ynh7w50f4";
+  const backendUrl = process.env.BACKEND_URL || "https://backend-production-49e4.up.railway.app";
+  const redirectUri = `${backendUrl}/auth/linkedin/callback`;
+  const scope  = "openid profile email w_member_social";
+  const state  = req.query.state || "nosession";
+  const url = "https://www.linkedin.com/oauth/v2/authorization?" + new URLSearchParams({
+    response_type: "code", client_id: clientId,
+    redirect_uri: redirectUri, scope, state,
+  });
+  console.log("[LinkedIn OAuth] 🔗 Starting OAuth for state:", state.slice(0, 20) + "...");
+  res.redirect(url);
+});
+
+// ─── LINKEDIN OAUTH CALLBACK ──────────────────────────────────────────────────
+app.get("/auth/linkedin/callback", async (req, res) => {
+  const FRONTEND_URL2 = process.env.FRONTEND_URL || "https://magnificent-crumble-ca6996.netlify.app";
+  const { code, state, error } = req.query;
+  if (error) return res.redirect(`${FRONTEND_URL2}?linkedin_error=${encodeURIComponent(error)}`);
+  if (!code) return res.redirect(`${FRONTEND_URL2}?linkedin_error=no_code`);
+
+  try {
+    const fetch      = require("node-fetch");
+    const { verifyAccessToken } = require("./services/auth");
+    const { Accounts, pool }    = require("./db");
+    const linkedin   = require("./services/linkedin");
+
+    const clientId     = process.env.LINKEDIN_CLIENT_ID || "787o7ynh7w50f4";
+    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET || "";
+    const backendUrl   = process.env.BACKEND_URL || "https://backend-production-49e4.up.railway.app";
+    const redirectUri  = `${backendUrl}/auth/linkedin/callback`;
+
+    // Шаг 1: Обменять code на access_token
+    const tokenRes = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", code,
+        redirect_uri: redirectUri, client_id: clientId, client_secret: clientSecret }),
+    });
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) throw new Error(`LinkedIn token: ${tokenData.error_description || tokenData.error}`);
+
+    const accessToken = tokenData.access_token;
+    const expiresAt   = new Date(Date.now() + (tokenData.expires_in || 5184000) * 1000);
+
+    // Шаг 2: Получить профиль
+    const profile = await linkedin.getProfile(accessToken);
+    const { id: linkedinId, name } = profile;
+    console.log("[LinkedIn OAuth] 👤 Profile:", name, linkedinId);
+
+    // Шаг 3: Определить workspace из state (JWT)
+    let workspaceId = null;
+    try {
+      const decoded = await verifyAccessToken(state);
+      workspaceId = decoded.workspaceId;
+    } catch { throw new Error("Невалидный state/JWT — авторизуйся заново"); }
+
+    // Шаг 4: Upsert аккаунт в БД
+    const existing = await pool.query(
+      "SELECT id FROM accounts WHERE workspace_id=$1 AND platform='linkedin' AND channel_id=$2",
+      [workspaceId, linkedinId]
+    );
+    if (existing.rows.length > 0) {
+      await pool.query(
+        "UPDATE accounts SET token=$1, token_expires_at=$2, is_active=true, name=$3 WHERE id=$4",
+        [accessToken, expiresAt, name, existing.rows[0].id]
+      );
+      console.log("[LinkedIn OAuth] 🔄 Updated existing account:", name);
+    } else {
+      await Accounts.create(workspaceId, {
+        platform: "linkedin", handle: name, name,
+        token: accessToken, channel_id: linkedinId,
+        icon: "💼", color: "#0077B5", token_expires_at: expiresAt,
+      });
+      console.log("[LinkedIn OAuth] ✅ Created new account:", name);
+    }
+
+    res.redirect(`${FRONTEND_URL2}?linkedin_connected=1&username=${encodeURIComponent(name)}`);
+  } catch (err) {
+    console.error("[LinkedIn OAuth] ❌ Error:", err.message);
+    res.redirect(`${FRONTEND_URL2}?linkedin_error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 try { app.use("/auth",  require("./routes/auth")); console.log("[Startup] ✅ auth routes"); }
 catch (e) { console.error("[Startup] ❌ routes/auth failed:", e.message); }
