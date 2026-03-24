@@ -71,14 +71,7 @@ const PORT = process.env.PORT || 3001;
 app.set("trust proxy", 1);
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-const allowedOrigins = (process.env.FRONTEND_URL || "*").split(",").map(s => s.trim());
-const corsOptions = {
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) cb(null, true);
-    else cb(null, false);
-  },
-  credentials: false,
-};
+const corsOptions = { origin: true, credentials: false };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
