@@ -589,7 +589,18 @@ function AccountsView({ accounts, setAccounts, toast }) {
     <div style={{ ...S.col, gap: 24 }}>
       <div style={{ ...S.row, justifyContent: "space-between" }}>
         <div style={S.h2}>📱 Аккаунты</div>
-        <button onClick={() => setAdding(!adding)} style={S.btnPrimary}>+ Добавить</button>
+        <div style={{ ...S.row, gap: 8 }}>
+          <button
+            onClick={() => {
+              const token = localStorage.getItem("accessToken");
+              window.location.href = `${API_URL}/auth/threads/start?state=${encodeURIComponent(token)}`;
+            }}
+            style={{ ...S.btnGhost, fontSize: 12, padding: "10px 16px", borderColor: "#444", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            🧵 Подключить Threads через Meta
+          </button>
+          <button onClick={() => setAdding(!adding)} style={S.btnPrimary}>+ Добавить вручную</button>
+        </div>
       </div>
 
       {adding && (
@@ -618,7 +629,13 @@ function AccountsView({ accounts, setAccounts, toast }) {
               </div>
               <div>
                 <label style={S.label}>{form.platform === "telegram" ? "Bot Token (опционально)" : "Access Token"}</label>
-                <input style={S.input} value={form.token} onChange={e => setForm(f => ({ ...f, token: e.target.value }))} placeholder={form.platform === "telegram" ? "Используется глобальный токен из .env" : "EAAxxxxx..."} />
+                {form.platform === "threads" ? (
+                  <div style={{ background: "#00d4aa12", border: "1px solid #00d4aa44", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#00d4aa" }}>
+                    ℹ️ Рекомендуем использовать кнопку «Давай Meta выше — токен сохранится автоматически на 60 дней».
+                    <br /><span style={{ color: "#8b949e" }}>Мануально можно вставить токен ниже (1 час):</span>
+                  </div>
+                ) : null}
+                <input style={{ ...S.input, marginTop: form.platform === "threads" ? 8 : 0 }} value={form.token} onChange={e => setForm(f => ({ ...f, token: e.target.value }))} placeholder={form.platform === "telegram" ? "Используется глобальный токен из .env" : "Вставь вручную EAAxxxxx... (необязательно)"} />
               </div>
               <div>
                 <label style={S.label}>{form.platform === "telegram" ? "Channel ID" : "Threads User ID"}</label>
@@ -1010,6 +1027,19 @@ export default function App() {
     }).catch(() => {
       localStorage.clear();
     }).finally(() => setLoading(false));
+  }, []);
+
+  // Обработка редиректа после Threads OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("threads_connected")) {
+      const username = params.get("username") || "Threads";
+      setTimeout(() => toast.show(`✅ @${username} подключён через Meta! Токен на 60 дней.`), 800);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("threads_error")) {
+      setTimeout(() => toast.show(`❌ Ошибка: ${decodeURIComponent(params.get("threads_error"))}`, "error"), 800);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   // Загрузка данных после логина
