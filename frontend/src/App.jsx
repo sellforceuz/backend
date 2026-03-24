@@ -32,6 +32,17 @@ const S = {
   btnDanger: { background: "transparent", color: "#f85149", border: "1px solid #f85149", borderRadius: 10, padding: "8px 16px", fontWeight: 600, fontSize: 13, cursor: "pointer" },
 };
 
+// ─── HOOKS ───────────────────────────────────────────────────────────────────
+function useWindowSize() {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return w;
+}
+
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
 function useApi() {
   const getToken = () => localStorage.getItem("accessToken");
@@ -191,7 +202,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-function Sidebar({ user, active, onNav, onLogout }) {
+function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
   const items = [
     { id: "generator", icon: "✨", label: "Генератор" },
     { id: "schedule", icon: "📅", label: "Планировщик" },
@@ -201,26 +212,50 @@ function Sidebar({ user, active, onNav, onLogout }) {
     ...(user?.role === "admin" ? [{ id: "admin", icon: "⚙️", label: "Администратор" }] : []),
   ];
 
-  return (
-    <div style={{ width: 220, background: "#0d1117", borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", minHeight: "100vh", padding: "20px 0" }}>
-      <div style={{ padding: "0 20px 24px", borderBottom: "1px solid #21262d" }}>
-        <div style={{ fontSize: 20, fontWeight: 900 }}>⚡ SellForce</div>
-        <div style={{ ...S.muted, fontSize: 12, marginTop: 2 }}>AI Автопостинг</div>
-      </div>
+  const handleNav = (id) => { onNav(id); if (isMobile && onClose) onClose(); };
 
-      <div style={{ flex: 1, padding: "12px 0" }}>
-        {items.map(item => (
-          <div key={item.id} onClick={() => onNav(item.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 20px", cursor: "pointer", background: active === item.id ? "#00d4aa15" : "transparent", borderLeft: active === item.id ? "3px solid #00d4aa" : "3px solid transparent", color: active === item.id ? "#00d4aa" : "#8b949e", fontWeight: active === item.id ? 700 : 500, fontSize: 14, transition: "all .15s" }}>
-            <span>{item.icon}</span><span>{item.label}</span>
-          </div>
-        ))}
-      </div>
+  const navItem = (item) => (
+    <div key={item.id} onClick={() => handleNav(item.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "14px 20px" : "10px 20px", cursor: "pointer", background: active === item.id ? "#00d4aa15" : "transparent", borderLeft: active === item.id ? "3px solid #00d4aa" : "3px solid transparent", color: active === item.id ? "#00d4aa" : "#8b949e", fontWeight: active === item.id ? 700 : 500, fontSize: isMobile ? 15 : 14, transition: "all .15s" }}>
+      <span style={{ fontSize: isMobile ? 18 : 14 }}>{item.icon}</span><span>{item.label}</span>
+    </div>
+  );
 
+  const sidebarContent = (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ padding: "16px 20px 16px", borderBottom: "1px solid #21262d", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 900 }}>⚡ SellForce</div>
+          <div style={{ ...S.muted, fontSize: 12, marginTop: 2 }}>AI Автопостинг</div>
+        </div>
+        {isMobile && <button onClick={onClose} style={{ background: "none", border: "none", color: "#8b949e", fontSize: 22, cursor: "pointer", padding: 4, lineHeight: 1 }}>✕</button>}
+      </div>
+      <div style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
+        {items.map(navItem)}
+      </div>
       <div style={{ padding: "16px 20px", borderTop: "1px solid #21262d" }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", marginBottom: 2 }}>{user?.name}</div>
         <div style={{ ...S.muted, fontSize: 11, marginBottom: 12 }}>{user?.plan?.toUpperCase()}</div>
         <button onClick={onLogout} style={{ ...S.btnGhost, fontSize: 12, padding: "6px 12px", width: "100%" }}>Выйти</button>
       </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {isOpen && (
+          <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 199, backdropFilter: "blur(2px)" }} />
+        )}
+        <div style={{ position: "fixed", top: 0, left: 0, height: "100vh", width: 270, background: "#0d1117", borderRight: "1px solid #21262d", zIndex: 200, transform: isOpen ? "translateX(0)" : "translateX(-100%)", transition: "transform 0.25s ease" }}>
+          {sidebarContent}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div style={{ width: 220, background: "#0d1117", borderRight: "1px solid #21262d", display: "flex", flexDirection: "column", minHeight: "100vh", flexShrink: 0 }}>
+      {sidebarContent}
     </div>
   );
 }
@@ -1029,8 +1064,11 @@ export default function App() {
   const [usage, setUsage] = useState(null);
   const [limits, setLimits] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const toast = useToast();
   const api = useApi();
+  const winW = useWindowSize();
+  const isMobile = winW < 768;
 
   // Проверяем сессию
   useEffect(() => {
@@ -1103,13 +1141,38 @@ export default function App() {
     admin: <AdminView toast={toast} />,
   };
 
+  const viewLabels = { generator: "✨ Генератор", schedule: "📅 Планировщик", analytics: "📈 Аналитика", accounts: "📱 Аккаунты", logs: "📊 Логи", admin: "⚙️ Администратор" };
+
   return (
-    <div style={{ ...S.page, ...S.row, alignItems: "flex-start" }}>
+    <div style={{ ...S.page, minHeight: "100vh" }}>
       {toast.toast && <Toast key={toast.toast.id} message={toast.toast.message} type={toast.toast.type} onClose={toast.clear} />}
-      <Sidebar user={user} active={view} onNav={setView} onLogout={handleLogout} />
-      <div style={{ flex: 1, padding: 32, minHeight: "100vh", overflow: "auto" }}>
-        {views[view] || views.generator}
+
+      {/* Mobile header */}
+      {isMobile && (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "#0d1117", borderBottom: "1px solid #21262d", display: "flex", alignItems: "center", padding: "12px 16px", gap: 12 }}>
+          <button onClick={() => setMobileOpen(true)} style={{ background: "none", border: "none", color: "#e6edf3", fontSize: 22, cursor: "pointer", padding: 4, lineHeight: 1 }}>☰</button>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#e6edf3" }}>{viewLabels[view] || "SellForce"}</div>
+          <div style={{ marginLeft: "auto", fontSize: 13, color: "#00d4aa", fontWeight: 600 }}>⚡ SellForce</div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "flex-start" }}>
+        <Sidebar user={user} active={view} onNav={setView} onLogout={handleLogout} isMobile={isMobile} isOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+        <div style={{ flex: 1, padding: isMobile ? "16px 12px 80px" : 32, minHeight: "100vh", overflow: "auto", maxWidth: isMobile ? "100%" : undefined }}>
+          {views[view] || views.generator}
+        </div>
       </div>
+
+      {/* Mobile bottom nav */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0d1117", borderTop: "1px solid #21262d", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          {[{ id: "generator", icon: "✨" }, { id: "schedule", icon: "📅" }, { id: "analytics", icon: "📈" }, { id: "accounts", icon: "📱" }, { id: "logs", icon: "📊" }].map(item => (
+            <button key={item.id} onClick={() => setView(item.id)} style={{ flex: 1, background: "none", border: "none", color: view === item.id ? "#00d4aa" : "#8b949e", fontSize: 22, padding: "12px 0 10px", cursor: "pointer", borderTop: view === item.id ? "2px solid #00d4aa" : "2px solid transparent", transition: "all .15s" }}>
+              {item.icon}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
