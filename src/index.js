@@ -242,7 +242,7 @@ app.get("/auth/linkedin/callback", async (req, res) => {
   try {
     const fetch      = require("node-fetch");
     const { verifyAccessToken } = require("./services/auth");
-    const { Accounts, pool }    = require("./db");
+    const { Accounts, Workspaces, Users, pool } = require("./db");
     const linkedin   = require("./services/linkedin");
 
     const clientId     = process.env.LINKEDIN_CLIENT_ID || "787o7ynh7w50f4";
@@ -268,12 +268,25 @@ app.get("/auth/linkedin/callback", async (req, res) => {
     const { id: linkedinId, name } = profile;
     console.log("[LinkedIn OAuth] 👤 Profile:", name, linkedinId);
 
-    // Шаг 3: Определить workspace из state (JWT)
+    // Шаг 3: Определить workspace из state (JWT) — то же что в Threads callback
     let workspaceId = null;
-    try {
-      const decoded = await verifyAccessToken(state);
-      workspaceId = decoded.workspaceId;
-    } catch { throw new Error("Невалидный state/JWT — авторизуйся заново"); }
+    const payload = state && state !== "nosession" ? verifyAccessToken(state) : null;
+    if (payload?.userId) {
+      const ws = await Workspaces.getByUserId(payload.userId);
+      workspaceId = ws?.id;
+    }
+
+    if (!workspaceId) {
+      // Fallback: admin workspace
+      const adminEmail = process.env.ADMIN_EMAIL || "amirmuxt12@gmail.com";
+      const admin = await Users.findByEmail(adminEmail);
+      if (admin) {
+        const ws = await Workspaces.getByUserId(admin.id);
+        workspaceId = ws?.id;
+      }
+    }
+
+    if (!workspaceId) throw new Error("Не удалось определить workspace");
 
     // Шаг 4: Upsert аккаунт в БД
     const existing = await pool.query(
