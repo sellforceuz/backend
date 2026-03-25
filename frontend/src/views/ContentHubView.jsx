@@ -194,11 +194,16 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
                   />
                 </div>
                 <button 
-                  onClick={() => {
+                  onClick={async () => {
                     if (!text) return toast.show("Сначала напишите текст поста", "error");
-                    const prompt = "A high quality professional cinematic photo representing: " + text.slice(0, 150).replace(/\n/g, " ");
-                    setMediaUrl(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true`);
-                    toast.show("Иллюстрация сгенерирована! 🎨");
+                    try {
+                      toast.show("ИИ придумывает иллюстрацию... 🎨");
+                      const data = await api.post("/api/generate-image", { text });
+                      setMediaUrl(data.url);
+                      toast.show("Иллюстрация готова!");
+                    } catch (err) {
+                      toast.show(err.message, "error");
+                    }
                   }}
                   style={{ ...S.btnGhost, borderColor: "#d2a8ff", color: "#d2a8ff", height: 38, padding: "0 16px" }}
                 >

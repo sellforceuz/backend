@@ -316,6 +316,43 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
   }
 });
 
+// POST /api/generate-image — AI генерация промпта для картинки на английском
+router.post("/generate-image", generateLimiter, checkLimit("generation"), async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Укажи текст" });
+
+    const fetch = require("node-fetch");
+    const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
+    const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+    const prompt = `Translate the essence of this post into a short, descriptive 1-sentence prompt for an AI image generator (in English). Only return the English string, nothing else. Text: "${text.slice(0, 300)}"`;
+
+    const groqRes = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 100,
+        temperature: 0.7,
+      }),
+    });
+    
+    const data = await groqRes.json();
+    let imagePrompt = data.choices?.[0]?.message?.content?.trim() || "A beautiful generic high quality photo";
+    // убираем кавычки если Llama их добавила
+    imagePrompt = imagePrompt.replace(/^["']|["']$/g, '');
+
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080&nologo=true`;
+    
+    await Usage.increment(req.workspaceId, "generations");
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/comments/generate — AI генерация комментариев-вариантов
 router.post("/comments/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
   try {
