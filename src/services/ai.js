@@ -106,6 +106,7 @@ ${customPrompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE ТВ�
         messages: [{ role: "user", content: prompt }],
         max_tokens: 800,
         temperature: 0.85,
+        response_format: { type: "json_object" }
       }),
       signal: controller.signal,
     });
@@ -117,14 +118,18 @@ ${customPrompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE ТВ�
     if (!raw) throw new Error("AI вернул пустой ответ");
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("AI не вернул JSON");
+    if (!jsonMatch) throw new Error("AI не вернул JSON: " + raw.substring(0, 100));
     
-    const parsed = JSON.parse(jsonMatch[0]);
-    return [
-      { type: "Экспертный", text: parsed.expert || "" },
-      { type: "Вовлекающий", text: parsed.engaging || "" },
-      { type: "Провокационный", text: parsed.provocative || "" }
-    ];
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return [
+        { type: "Экспертный", text: parsed.expert || "" },
+        { type: "Вовлекающий", text: parsed.engaging || "" },
+        { type: "Провокационный", text: parsed.provocative || "" }
+      ];
+    } catch (e) {
+      throw new Error("AI вернул невалидный JSON: " + e.message);
+    }
   } catch (err) {
     if (err.name === "AbortError") throw new Error("AI: таймаут запроса (15 сек)");
     throw err;
