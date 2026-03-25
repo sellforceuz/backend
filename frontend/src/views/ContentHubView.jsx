@@ -212,7 +212,9 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
               </div>
               {mediaUrl && (
                 <div style={{ marginTop: 12, borderRadius: 8, overflow: "hidden", border: "1px solid #30363d", background: "#0d1117", padding: 4, width: "fit-content" }}>
-                  <img src={mediaUrl} alt="Preview" style={{ maxHeight: 200, maxWidth: "100%", borderRadius: 6, objectFit: "contain" }} />
+                  <a href={mediaUrl} target="_blank" rel="noreferrer" title="Нажмите, чтобы открыть оригинал">
+                    <img src={mediaUrl} alt="Preview" style={{ maxHeight: 200, maxWidth: "100%", borderRadius: 6, objectFit: "contain", cursor: "pointer" }} />
+                  </a>
                 </div>
               )}
             </div>
