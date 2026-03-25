@@ -3,7 +3,7 @@ const fetch = require("node-fetch");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-async function generatePost({ accountName, accountHandle, topic, tone, format, idea }) {
+async function generatePost({ accountName, accountHandle, topic, tone, format, idea, customPrompt }) {
   const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY не задан в Railway");
 
@@ -15,6 +15,7 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 Тональность: ${tone || "авторская"}
 Формат: ${format || "на выбор"}
 
+${customPrompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE):\n${customPrompt}\n` : ""}
 Правила поста:
 - До 500 символов (ограничение Threads)
 - Первое предложение ОСТАНАВЛИВАЕТ скролл: провокация, цифра, боль, неожиданный факт
@@ -60,13 +61,14 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
   }
 }
 
-async function generateCommentVariants(postText, focus = "предпринимательство, бизнес, СНГ") {
+async function generateCommentVariants(postText, focus = "предпринимательство, бизнес, СНГ", customPrompt = null) {
   const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY не задан");
 
   const prompt = `Ты — эксперт по контент-маркетингу для Threads (рынок СНГ).
 Тематика аккаунта: "${focus}"
 
+${customPrompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE ТВОЕГО АККАУНТА):\n${customPrompt}\n` : ""}
 Тебе дали текст поста:
 "${postText}"
 

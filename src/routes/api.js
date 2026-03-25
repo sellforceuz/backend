@@ -111,6 +111,7 @@ router.post("/accounts", async (req, res) => {
       threads_user_id: threads_user_id || null,
       token_expires_at: tokenExpiresAt,
       account_status: "active",
+      custom_prompt: req.body.custom_prompt || null,
     };
 
     const account = await Accounts.create(req.workspaceId, accountData);
@@ -299,6 +300,7 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
       accountName: account?.name || "Мой аккаунт",
       accountHandle: account?.handle || "",
       topic, tone, format, idea,
+      customPrompt: account?.custom_prompt || null,
     });
 
     await Usage.increment(req.workspaceId, "generations");
@@ -313,11 +315,22 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
 // POST /api/comments/generate — AI генерация комментариев-вариантов
 router.post("/comments/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
   try {
-    const { text, focus } = req.body;
+    const { text, focus, account_id } = req.body;
     if (!text) return res.status(400).json({ error: "Укажи текст поста (text)" });
     if (text.length > 2000) return res.status(400).json({ error: "Текст поста слишком длинный" });
 
-    const variants = await generateCommentVariants(text, focus);
+    let customPrompt = null;
+    let fallbackFocus = focus;
+    if (account_id) {
+      const accounts = await Accounts.getAll(req.workspaceId);
+      const acc = accounts.find(a => a.id === parseInt(account_id));
+      if (acc) {
+        customPrompt = acc.custom_prompt || null;
+        if (acc.content_focus) fallbackFocus = acc.content_focus;
+      }
+    }
+
+    const variants = await generateCommentVariants(text, fallbackFocus, customPrompt);
 
     await Usage.increment(req.workspaceId, "generations");
     await Log.add(req.workspaceId, "ai_comment", "gemini", `Сгенерированы комментарии умных ответов`);

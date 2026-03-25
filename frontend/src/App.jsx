@@ -1058,8 +1058,9 @@ function AdminView({ toast }) {
 }
 
 // ─── SMART REPLIES VIEW ───────────────────────────────────────────────────────
-function SmartRepliesView({ toast }) {
+function SmartRepliesView({ accounts, toast }) {
   const api = useApi();
+  const [accountId, setAccountId] = useState("");
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [variants, setVariants] = useState([]);
@@ -1069,7 +1070,7 @@ function SmartRepliesView({ toast }) {
     setLoading(true);
     setVariants([]);
     try {
-      const data = await api.post("/api/comments/generate", { text });
+      const data = await api.post("/api/comments/generate", { text, account_id: accountId ? parseInt(accountId) : null });
       setVariants(data.variants || []);
       toast.show("Варианты сгенерированы!");
     } catch (err) {
@@ -1092,6 +1093,16 @@ function SmartRepliesView({ toast }) {
       </div>
 
       <div style={S.card}>
+        {accounts && accounts.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={S.label}>Аккаунт (Стиль ответов)</label>
+            <select style={S.select} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">🤖 Без индивидуального стиля</option>
+              {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name} ({a.platform})</option>)}
+            </select>
+          </div>
+        )}
+
         <label style={S.label}>Текст поста для ответа</label>
         <textarea
           style={{ ...S.textarea, minHeight: 100, marginBottom: 16 }}
@@ -1205,7 +1216,7 @@ export default function App() {
 
   const views = {
     generator: <GeneratorView accounts={accounts} usage={usage} limits={limits} toast={toast} />,
-    smart_replies: <SmartRepliesView toast={toast} />,
+    smart_replies: <SmartRepliesView accounts={accounts} toast={toast} />,
     schedule: <ScheduleView accounts={accounts} toast={toast} user={user} />,
     analytics: <AnalyticsView toast={toast} user={user} />,
     accounts: <AccountsView accounts={accounts} setAccounts={setAccounts} toast={toast} />,

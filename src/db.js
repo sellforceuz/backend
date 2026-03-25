@@ -102,6 +102,7 @@ async function initDB() {
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS autopilot_enabled BOOLEAN DEFAULT false;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS content_focus TEXT;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS daily_post_count INTEGER DEFAULT 5;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS custom_prompt TEXT;
     `);
 
     // Очистка устаревших threads_post_id у failed/scheduled постов
@@ -182,14 +183,15 @@ const Accounts = {
   },
   create: async (workspaceId, data) => {
     const r = await pool.query(
-      `INSERT INTO accounts (workspace_id,platform,handle,name,color,icon,token,channel_id,threads_user_id,token_expires_at,account_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      `INSERT INTO accounts (workspace_id,platform,handle,name,color,icon,token,channel_id,threads_user_id,token_expires_at,account_status,custom_prompt)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [workspaceId, data.platform, data.handle, data.name,
        data.color || "#00d4aa", data.icon || "📱",
        data.token || null, data.channel_id || null,
        data.threads_user_id || null,
        data.token_expires_at || null,
-       data.account_status || "active"]
+       data.account_status || "active",
+       data.custom_prompt || null]
     );
     return r.rows[0];
   },
@@ -198,13 +200,15 @@ const Accounts = {
       `UPDATE accounts SET handle=$3,name=$4,token=$5,channel_id=$6,threads_user_id=$7,color=$8,icon=$9,
        autopilot_enabled=COALESCE($10, autopilot_enabled),
        content_focus=COALESCE($11, content_focus),
-       daily_post_count=COALESCE($12, daily_post_count)
+       daily_post_count=COALESCE($12, daily_post_count),
+       custom_prompt=COALESCE($13, custom_prompt)
        WHERE id=$1 AND workspace_id=$2 RETURNING *`,
       [id, workspaceId, data.handle, data.name, data.token,
        data.channel_id, data.threads_user_id, data.color, data.icon,
        data.autopilot_enabled ?? null,
        data.content_focus ?? null,
-       data.daily_post_count ?? null]
+       data.daily_post_count ?? null,
+       data.custom_prompt ?? null]
     );
     return r.rows[0];
   },
