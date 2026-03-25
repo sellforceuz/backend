@@ -4,7 +4,7 @@ const router = express.Router();
 const rateLimit = require("express-rate-limit");
 const { Accounts, Posts, Usage, Log, PLAN_LIMITS, pool } = require("../db");
 const { requireAuth, checkLimit } = require("../middleware/auth");
-const { generatePost } = require("../services/ai");
+const { generatePost, generateCommentVariants } = require("../services/ai");
 const telegram = require("../services/telegram");
 const threads  = require("../services/threads");
 
@@ -305,6 +305,24 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
     await Log.add(req.workspaceId, "ai_generate", "gemini", `Тема: ${topic}`);
 
     res.json({ text });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/comments/generate — AI генерация комментариев-вариантов
+router.post("/comments/generate", generateLimiter, checkLimit("generation"), async (req, res) => {
+  try {
+    const { text, focus } = req.body;
+    if (!text) return res.status(400).json({ error: "Укажи текст поста (text)" });
+    if (text.length > 2000) return res.status(400).json({ error: "Текст поста слишком длинный" });
+
+    const variants = await generateCommentVariants(text, focus);
+
+    await Usage.increment(req.workspaceId, "generations");
+    await Log.add(req.workspaceId, "ai_comment", "gemini", `Сгенерированы комментарии умных ответов`);
+
+    res.json({ variants });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

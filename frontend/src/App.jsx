@@ -205,6 +205,7 @@ function LoginScreen({ onLogin }) {
 function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
   const items = [
     { id: "generator", icon: "✨", label: "Генератор" },
+    { id: "smart_replies", icon: "💬", label: "Умные ответы" },
     { id: "schedule", icon: "📅", label: "Планировщик" },
     { id: "analytics", icon: "📈", label: "Аналитика" },
     { id: "accounts", icon: "📱", label: "Аккаунты" },
@@ -1056,6 +1057,76 @@ function AdminView({ toast }) {
   );
 }
 
+// ─── SMART REPLIES VIEW ───────────────────────────────────────────────────────
+function SmartRepliesView({ toast }) {
+  const api = useApi();
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [variants, setVariants] = useState([]);
+
+  async function generate() {
+    if (!text) return toast.show("Вставьте текст поста", "error");
+    setLoading(true);
+    setVariants([]);
+    try {
+      const data = await api.post("/api/comments/generate", { text });
+      setVariants(data.variants || []);
+      toast.show("Варианты сгенерированы!");
+    } catch (err) {
+      toast.show(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copyText(str) {
+    navigator.clipboard.writeText(str);
+    toast.show("Скопировано!");
+  }
+
+  return (
+    <div style={{ ...S.col, gap: 24, maxWidth: 800, margin: "0 auto" }}>
+      <div style={S.h2}>💬 Умные ответы</div>
+      <div style={S.muted}>
+        Вставьте текст поста, чтобы получить 3 варианта комментария для Threads. Безопасный ручной режим.
+      </div>
+
+      <div style={S.card}>
+        <label style={S.label}>Текст поста для ответа</label>
+        <textarea
+          style={{ ...S.textarea, minHeight: 100, marginBottom: 16 }}
+          placeholder="Вставьте текст или мысль поста..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <button
+          onClick={generate}
+          style={{ ...S.btnPrimary, width: "100%", opacity: loading ? 0.7 : 1 }}
+          disabled={loading}
+        >
+          {loading ? "Генерация ответа..." : "Сгенерировать 3 варианта"}
+        </button>
+      </div>
+
+      {variants.length > 0 && (
+        <div style={{ ...S.col, gap: 16 }}>
+          {variants.map((v, i) => (
+            <div key={i} style={S.card}>
+              <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontWeight: 700, color: "#00d4aa" }}>{v.type}</span>
+                <button onClick={() => copyText(v.text)} style={{ ...S.btnGhost, padding: "4px 12px", fontSize: 12 }}>
+                  Копировать
+                </button>
+              </div>
+              <div style={{ color: "#e6edf3", whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{v.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
@@ -1134,6 +1205,7 @@ export default function App() {
 
   const views = {
     generator: <GeneratorView accounts={accounts} usage={usage} limits={limits} toast={toast} />,
+    smart_replies: <SmartRepliesView toast={toast} />,
     schedule: <ScheduleView accounts={accounts} toast={toast} user={user} />,
     analytics: <AnalyticsView toast={toast} user={user} />,
     accounts: <AccountsView accounts={accounts} setAccounts={setAccounts} toast={toast} />,
@@ -1141,7 +1213,7 @@ export default function App() {
     admin: <AdminView toast={toast} />,
   };
 
-  const viewLabels = { generator: "✨ Генератор", schedule: "📅 Планировщик", analytics: "📈 Аналитика", accounts: "📱 Аккаунты", logs: "📊 Логи", admin: "⚙️ Администратор" };
+  const viewLabels = { generator: "✨ Генератор", smart_replies: "💬 Умные ответы", schedule: "📅 Планировщик", analytics: "📈 Аналитика", accounts: "📱 Аккаунты", logs: "📊 Логи", admin: "⚙️ Администратор" };
 
   return (
     <div style={{ ...S.page, minHeight: "100vh" }}>
@@ -1166,7 +1238,7 @@ export default function App() {
       {/* Mobile bottom nav */}
       {isMobile && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0d1117", borderTop: "1px solid #21262d", display: "flex", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-          {[{ id: "generator", icon: "✨" }, { id: "schedule", icon: "📅" }, { id: "analytics", icon: "📈" }, { id: "accounts", icon: "📱" }, { id: "logs", icon: "📊" }].map(item => (
+          {[{ id: "generator", icon: "✨" }, { id: "smart_replies", icon: "💬" }, { id: "schedule", icon: "📅" }, { id: "analytics", icon: "📈" }, { id: "accounts", icon: "📱" }].map(item => (
             <button key={item.id} onClick={() => setView(item.id)} style={{ flex: 1, background: "none", border: "none", color: view === item.id ? "#00d4aa" : "#8b949e", fontSize: 22, padding: "12px 0 10px", cursor: "pointer", borderTop: view === item.id ? "2px solid #00d4aa" : "2px solid transparent", transition: "all .15s" }}>
               {item.icon}
             </button>
