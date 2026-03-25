@@ -35,7 +35,12 @@ export function AccountsView({ accounts, setAccounts, toast }) {
   const [triggeringAutopilot, setTriggeringAutopilot] = useState({});
 
   function getAutopilotForm(a) {
-    return autopilotForms[a.id] || { autopilot_enabled: a.autopilot_enabled || false, content_focus: a.content_focus || "", custom_prompt: a.custom_prompt || "" };
+    return autopilotForms[a.id] || { 
+      autopilot_enabled: a.autopilot_enabled || false, 
+      content_focus: a.content_focus || "", 
+      custom_prompt: a.custom_prompt || "",
+      autopilot_times: Array.isArray(a.autopilot_times) ? a.autopilot_times : ["09:00", "12:00", "16:00", "19:00", "22:00"]
+    };
   }
 
   async function save(e) {
@@ -67,6 +72,7 @@ export function AccountsView({ accounts, setAccounts, toast }) {
         autopilot_enabled: f.autopilot_enabled,
         content_focus: f.content_focus,
         custom_prompt: f.custom_prompt,
+        autopilot_times: f.autopilot_times,
       });
       setAccounts(prev => prev.map(acc => acc.id === a.id ? { ...acc, ...f } : acc));
       toast.show(f.autopilot_enabled ? "🤖 Автопилот включён!" : "Автопилот выключен");
@@ -257,8 +263,46 @@ export function AccountsView({ accounts, setAccounts, toast }) {
                     />
                   </div>
 
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", marginBottom: 8 }}>
+                    Расписание постов ({apf.autopilot_times.length} в день)
+                  </div>
+                  <div style={{ ...S.row, gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    {apf.autopilot_times.map((time, idx) => (
+                      <div key={idx} style={{ ...S.row, background: "#161b22", padding: "4px 8px", borderRadius: 6, border: "1px solid #30363d" }}>
+                        <input 
+                          type="time" 
+                          value={time}
+                          onChange={(e) => {
+                            const newTimes = [...apf.autopilot_times];
+                            newTimes[idx] = e.target.value;
+                            setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, autopilot_times: newTimes } }));
+                          }}
+                          style={{ background: "transparent", border: "none", color: "#e6edf3", fontSize: 13, outline: "none" }}
+                        />
+                        <button 
+                          onClick={() => {
+                            const newTimes = apf.autopilot_times.filter((_, i) => i !== idx);
+                            setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, autopilot_times: newTimes } }));
+                          }}
+                          style={{ background: "none", border: "none", color: "#f85149", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {apf.autopilot_times.length < 10 && (
+                      <button
+                        onClick={() => {
+                          setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, autopilot_times: [...apf.autopilot_times, "12:00"] } }));
+                        }}
+                        style={{ ...S.btnGhost, padding: "4px 8px", fontSize: 12 }}
+                      >
+                        + Добавить время
+                      </button>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 12 }}>
-                    {t("acc_ap_schedule")}
+                    Система генерирует посты по указанным часам (±10 мин для реалистичности).
                   </div>
 
                   <div style={{ ...S.row, gap: 8 }}>

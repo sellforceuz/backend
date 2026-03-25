@@ -103,6 +103,7 @@ async function initDB() {
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS content_focus TEXT;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS daily_post_count INTEGER DEFAULT 5;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS custom_prompt TEXT;
+      ALTER TABLE accounts ADD COLUMN IF NOT EXISTS autopilot_times JSONB DEFAULT '["09:00", "12:00", "16:00", "19:00", "22:00"]'::jsonb;
     `);
 
     // Очистка устаревших threads_post_id у failed/scheduled постов
@@ -201,14 +202,16 @@ const Accounts = {
        autopilot_enabled=COALESCE($10, autopilot_enabled),
        content_focus=COALESCE($11, content_focus),
        daily_post_count=COALESCE($12, daily_post_count),
-       custom_prompt=COALESCE($13, custom_prompt)
+       custom_prompt=COALESCE($13, custom_prompt),
+       autopilot_times=COALESCE($14, autopilot_times)
        WHERE id=$1 AND workspace_id=$2 RETURNING *`,
       [id, workspaceId, data.handle, data.name, data.token,
        data.channel_id, data.threads_user_id, data.color, data.icon,
        data.autopilot_enabled ?? null,
        data.content_focus ?? null,
        data.daily_post_count ?? null,
-       data.custom_prompt ?? null]
+       data.custom_prompt ?? null,
+       data.autopilot_times ? JSON.stringify(data.autopilot_times) : null]
     );
     return r.rows[0];
   },

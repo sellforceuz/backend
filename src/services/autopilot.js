@@ -21,24 +21,28 @@ const POST_FORMATS = [
   "Короткий юмор, мем в текстовом формате или самоирония",
 ];
 
-// Генерирует scheduled_at с рандомизацией ±15 мин (UTC)
-function getScheduledAt(slot, dateStr) {
-  const rand = Math.floor(Math.random() * 31) - 15; // -15 .. +15
-  const totalMin = slot.minBase + rand;
+// Генерирует scheduled_at с рандомизацией ±10 мин (UTC)
+function getScheduledAt(timeStr, dateStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const rand = Math.floor(Math.random() * 21) - 10; // -10 .. +10
+  const totalMin = m + rand;
   const minute = ((totalMin % 60) + 60) % 60;
-  const hourOffset = Math.floor((slot.minBase + rand) / 60);
-  const hour = slot.hour + hourOffset - 5; // Ташкент UTC+5 → UTC
+  const hourOffset = Math.floor((m + rand) / 60);
+  const hour = h + hourOffset - 5; // Ташкент UTC+5 → UTC
   return `${dateStr}T${String((hour + 24) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`;
 }
 
-// Генерирует 5 постов для аккаунта через Groq
-async function generateDailyPosts(account) {
+async function generateDailyPosts(account, count) {
   const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY не задан");
 
   const focus = account.content_focus || "бизнес, предпринимательство, СНГ";
-  const count = account.daily_post_count || 5;
-  const formats = POST_FORMATS.slice(0, count);
+  
+  // Если постов много, зацикливаем форматы, чтобы хватило на всех
+  const formats = [];
+  for (let i = 0; i < count; i++) {
+    formats.push(POST_FORMATS[i % POST_FORMATS.length]);
+  }
 
   const prompt = `Ты — эксперт-контент-маркетолог для Threads и Telegram (рынок СНГ).
 
@@ -101,17 +105,22 @@ async function runDailyAutopilot(account) {
   console.log(`[Autopilot] Запуск для аккаунта: ${account.name} (${account.platform})`);
 
   try {
-    const posts = await generateDailyPosts(account);
+    // Получаем кастомные часы или используем стандартные
+    const times = Array.isArray(account.autopilot_times) && account.autopilot_times.length > 0
+      ? account.autopilot_times
+      : ["09:00", "12:00", "16:00", "19:00", "22:00"];
+      
+    const posts = await generateDailyPosts(account, times.length);
     if (!posts.length) throw new Error("Нет постов от AI");
 
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const count = Math.min(posts.length, TIME_SLOTS.length);
+    const count = Math.min(posts.length, times.length);
 
     for (let i = 0; i < count; i++) {
       const text = posts[i]?.text;
       if (!text || text.length < 20) continue;
 
-      const scheduledAt = getScheduledAt(TIME_SLOTS[i], today);
+      const scheduledAt = getScheduledAt(times[i], today);
 
       // Определяем платформы для публикации
       const platforms = account.platform === "threads"
