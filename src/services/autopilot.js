@@ -63,11 +63,14 @@ ${formats.map((f, i) => `Пост ${i + 1}: ${f}`).join("\n")}
 Формат ответа — строго JSON:
 {
   "posts": [
-    {"text": "текст поста 1"},
-    {"text": "текст поста 2"},
-    {"text": "текст поста 3"},
-    {"text": "текст поста 4"},
-    {"text": "текст поста 5"}
+    {
+      "text": "текст поста 1",
+      "image_prompt": "english description of a high quality photo to accompany post 1, e.g. 'A modern businessman working on a laptop in a bright cafe, cinematic lighting, 8k resolution, photorealistic'"
+    },
+    {
+      "text": "текст поста 2",
+      "image_prompt": "english description..."
+    }
   ]
 }
 
@@ -118,9 +121,14 @@ async function runDailyAutopilot(account) {
 
     for (let i = 0; i < count; i++) {
       const text = posts[i]?.text;
+      const imagePrompt = posts[i]?.image_prompt;
       if (!text || text.length < 20) continue;
 
       const scheduledAt = getScheduledAt(times[i], today);
+      
+      const mediaUrl = imagePrompt 
+        ? `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080&nologo=true`
+        : null;
 
       // Определяем платформы для публикации
       const platforms = account.platform === "threads"
@@ -130,12 +138,12 @@ async function runDailyAutopilot(account) {
         : [account.platform];
 
       await pool.query(
-        `INSERT INTO posts (workspace_id, account_id, text, platforms, status, scheduled_at)
-         VALUES ($1, $2, $3, $4, 'scheduled', $5)`,
-        [account.workspace_id, account.id, text, JSON.stringify(platforms), scheduledAt]
+        `INSERT INTO posts (workspace_id, account_id, text, media_url, platforms, status, scheduled_at)
+         VALUES ($1, $2, $3, $4, $5, 'scheduled', $6)`,
+        [account.workspace_id, account.id, text, mediaUrl, JSON.stringify(platforms), scheduledAt]
       );
 
-      console.log(`[Autopilot] ✅ Пост ${i + 1}/${count} запланирован на ${scheduledAt}`);
+      console.log(`[Autopilot] ✅ Пост ${i + 1}/${count} запланирован на ${scheduledAt} (Media: ${!!mediaUrl})`);
     }
 
     console.log(`[Autopilot] ✅ Аккаунт ${account.name}: ${count} постов запланировано`);

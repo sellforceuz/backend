@@ -11,6 +11,7 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
   const [loading, setLoading] = useState(true);
   
   const [text, setText] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [time, setTime] = useState("10:00");
@@ -48,9 +49,9 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
     if (!accountId || !text) return toast.show(t("sch_err_acc_text"), "error");
     setSaving(true);
     try {
-      await api.post("/api/posts", { account_id: parseInt(accountId), text, platforms, scheduled_at: `${date}T${time}:00+05:00` });
+      await api.post("/api/posts", { account_id: parseInt(accountId), text, media_url: mediaUrl, platforms, scheduled_at: `${date}T${time}:00+05:00` });
       toast.show(t("sch_success_plan"));
-      setText(""); load();
+      setText(""); setMediaUrl(""); load();
     } catch (err) { toast.show(err.message, "error"); }
     finally { setSaving(false); }
   }
@@ -66,10 +67,10 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
     if (!accountId || !text) return toast.show(t("sch_err_acc_text"), "error");
     setPublishingNow(true);
     try {
-      const data = await api.post("/api/posts/publish-now", { account_id: parseInt(accountId), text, platforms });
+      const data = await api.post("/api/posts/publish-now", { account_id: parseInt(accountId), text, media_url: mediaUrl, platforms });
       const allOk = data.results.every(r => r.ok);
       toast.show(allOk ? t("sch_success_pub") : t("sch_warn_pub"), allOk ? "success" : "error");
-      setText("");
+      setText(""); setMediaUrl("");
     } catch (err) { toast.show(err.message, "error"); }
     finally { setPublishingNow(false); }
   }
@@ -180,6 +181,36 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
                 <span style={{ fontSize: 12, color: text.length > 500 ? "#f85149" : "#8b949e" }}>{text.length}/500</span>
               </div>
             </div>
+            
+            <div style={{ marginTop: 8 }}>
+              <div style={{ ...S.row, gap: 12, alignItems: "flex-end" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>Ссылка на фото (или сгенерируй ИИ)</label>
+                  <input 
+                    style={S.input} 
+                    value={mediaUrl} 
+                    onChange={e => setMediaUrl(e.target.value)} 
+                    placeholder="https://example.com/image.jpg" 
+                  />
+                </div>
+                <button 
+                  onClick={() => {
+                    if (!text) return toast.show("Сначала напишите текст поста", "error");
+                    const prompt = "A high quality professional cinematic photo representing: " + text.slice(0, 150).replace(/\n/g, " ");
+                    setMediaUrl(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true`);
+                    toast.show("Иллюстрация сгенерирована! 🎨");
+                  }}
+                  style={{ ...S.btnGhost, borderColor: "#d2a8ff", color: "#d2a8ff", height: 38, padding: "0 16px" }}
+                >
+                  🎨 ИИ Иллюстрация
+                </button>
+              </div>
+              {mediaUrl && (
+                <div style={{ marginTop: 12, borderRadius: 8, overflow: "hidden", border: "1px solid #30363d", background: "#0d1117", padding: 4, width: "fit-content" }}>
+                  <img src={mediaUrl} alt="Preview" style={{ maxHeight: 200, maxWidth: "100%", borderRadius: 6, objectFit: "contain" }} />
+                </div>
+              )}
+            </div>
           </div>
 
         </div>
@@ -213,7 +244,10 @@ export function ContentHubView({ accounts, usage, limits, toast, user }) {
                     <span style={{ fontSize: 20 }}>{p.icon || "📱"}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: "#e6edf3", fontWeight: 600, marginBottom: 2 }}>{p.account_name}</div>
-                      <div style={{ fontSize: 12, color: "#8b949e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.text}</div>
+                      <div style={{ fontSize: 12, color: "#8b949e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {p.media_url && <span style={{ color: "#d2a8ff", marginRight: 6 }}>🖼️ Фото</span>}
+                        {p.text}
+                      </div>
                       {Object.keys(m).length > 0 && (
                         <div style={{ ...S.row, gap: 12, marginTop: 5, flexWrap: "wrap" }}>
                           {m.telegram?.channel_members !== undefined && <span style={{ fontSize: 11, color: "#79c0ff" }} title="Подписчики канала">👥 {m.telegram.channel_members.toLocaleString()}</span>}

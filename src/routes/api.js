@@ -179,7 +179,7 @@ router.get("/posts", async (req, res) => {
 // POST /api/posts — создать и запланировать пост
 router.post("/posts", async (req, res) => {
   try {
-    const { account_id, text, platforms, scheduled_at } = req.body;
+    const { account_id, text, media_url, platforms, scheduled_at } = req.body;
     if (!account_id || !text || !scheduled_at) return res.status(400).json({ error: "Укажи account_id, text и scheduled_at" });
 
     // FIX #2: Валидация длины текста
@@ -196,7 +196,7 @@ router.post("/posts", async (req, res) => {
     const scheduledDate = new Date(scheduled_at);
     if (isNaN(scheduledDate.getTime())) return res.status(400).json({ error: "Некорректная дата scheduled_at" });
 
-    const post = await Posts.create(req.workspaceId, { account_id, text, platforms: cleanPlatforms, scheduled_at });
+    const post = await Posts.create(req.workspaceId, { account_id, text, media_url, platforms: cleanPlatforms, scheduled_at });
     res.json({ post });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -206,7 +206,7 @@ router.post("/posts", async (req, res) => {
 // POST /api/posts/publish-now — немедленная публикация
 router.post("/posts/publish-now", async (req, res) => {
   try {
-    const { account_id, text, platforms } = req.body;
+    const { account_id, text, media_url, platforms } = req.body;
     if (!account_id || !text) return res.status(400).json({ error: "Укажи account_id и text" });
 
     // FIX #2: Валидация длины
@@ -223,10 +223,14 @@ router.post("/posts/publish-now", async (req, res) => {
     for (const platform of plats) {
       try {
         if (platform === "telegram" && account.channel_id) {
-          await telegram.sendMessage(account.channel_id, text);
+          if (media_url) {
+            await telegram.sendPhoto(account.channel_id, media_url, text);
+          } else {
+            await telegram.sendMessage(account.channel_id, text);
+          }
           results.push({ platform, ok: true });
         } else if (platform === "threads" && account.token && account.threads_user_id) {
-          await threads.publishPost(account.threads_user_id, account.token, text);
+          await threads.publishPost(account.threads_user_id, account.token, text, media_url);
           results.push({ platform, ok: true });
         } else {
           results.push({ platform, ok: false, error: "Нет токена или channel_id" });

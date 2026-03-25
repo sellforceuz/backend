@@ -53,6 +53,7 @@ async function initDB() {
         workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
         account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
         text         TEXT NOT NULL,
+        media_url    TEXT,
         platforms    JSONB NOT NULL DEFAULT '["telegram"]',
         status       TEXT NOT NULL DEFAULT 'scheduled',
         scheduled_at TIMESTAMPTZ NOT NULL,
@@ -97,6 +98,7 @@ async function initDB() {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS metrics JSONB DEFAULT '{}';
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS last_stats_update TIMESTAMPTZ;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_url TEXT;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'active';
       ALTER TABLE accounts ADD COLUMN IF NOT EXISTS autopilot_enabled BOOLEAN DEFAULT false;
@@ -246,9 +248,9 @@ const Posts = {
   },
   create: async (workspaceId, data) => {
     const r = await pool.query(
-      `INSERT INTO posts (workspace_id,account_id,text,platforms,scheduled_at)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [workspaceId, data.account_id, data.text,
+      `INSERT INTO posts (workspace_id,account_id,text,media_url,platforms,scheduled_at)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [workspaceId, data.account_id, data.text, data.media_url || null,
        JSON.stringify(data.platforms || ["telegram"]), data.scheduled_at]
     );
     return r.rows[0];

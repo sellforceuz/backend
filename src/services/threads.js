@@ -79,7 +79,7 @@ async function verifyThreadsToken(userId, token) {
   return { username: data.username, id: data.id };
 }
 
-async function publishPost(userId, token, text) {
+async function publishPost(userId, token, text, mediaUrl) {
   if (!token || !userId) throw new Error("Нет токена или userId для Threads");
 
   // Очистка текста
@@ -88,17 +88,20 @@ async function publishPost(userId, token, text) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // Валидация — текст обязателен для TEXT постов
-  if (!cleanText) throw new Error("Threads: текст поста не может быть пустым");
+  // Валидация — текст обязателен для TEXT постов, но может быть картинка
+  if (!cleanText && !mediaUrl) throw new Error("Threads: текст или картинка обязательны");
 
   console.log(`[Threads] 🚀 Публикуем для User ID: ${userId} | Токен: ...${token.slice(-8)} | Текст: ${cleanText.slice(0,50)}...`);
 
   // Шаг 1: Создаём НОВЫЙ контейнер (всегда с нуля, без кэша)
-  const containerParams = new URLSearchParams({
-    media_type: "TEXT",
+  const containerParamsObj = {
+    media_type: mediaUrl ? "IMAGE" : "TEXT",
     text: cleanText,
     access_token: token,
-  });
+  };
+  if (mediaUrl) containerParamsObj.image_url = mediaUrl;
+  
+  const containerParams = new URLSearchParams(containerParamsObj);
   const containerUrl = `${BASE}/${userId}/threads`;
   console.log(`[Threads] 📦 Создаём контейнер: POST ${containerUrl}`);
 

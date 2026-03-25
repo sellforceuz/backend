@@ -36,6 +36,26 @@ async function sendMessage(chatId, text, botToken) {
   return data.result;
 }
 
+// Отправить фото в канал/чат
+async function sendPhoto(chatId, photoUrl, caption, botToken) {
+  const token = botToken || getBotToken();
+  if (!token) throw new Error("TG_BOT_TOKEN не задан");
+
+  const res = await fetchWithTimeout(
+    `https://api.telegram.org/bot${token}/sendPhoto`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, parse_mode: "HTML" }),
+    },
+    15000 // 15 секунд для фото
+  );
+
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Telegram Photo: ${data.description}`);
+  return data.result;
+}
+
 // Получить количество участников
 async function getMemberCount(chatId, botToken) {
   const token = botToken || getBotToken();
@@ -77,4 +97,4 @@ async function verifyTelegram(chatId, botToken) {
   return { title: data.result.title, type: data.result.type, username: data.result.username };
 }
 
-module.exports = { sendMessage, getMemberCount, verifyTelegram };
+module.exports = { sendMessage, sendPhoto, getMemberCount, verifyTelegram };

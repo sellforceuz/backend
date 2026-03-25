@@ -24,14 +24,19 @@ async function publishPost(post) {
   for (const platform of platforms) {
     try {
       if (platform === "telegram" && post.channel_id) {
-        const result = await telegram.sendMessage(post.channel_id, post.text);
+        let result;
+        if (post.media_url) {
+          result = await telegram.sendPhoto(post.channel_id, post.media_url, post.text);
+        } else {
+          result = await telegram.sendMessage(post.channel_id, post.text);
+        }
         // Сохраняем ID сообщения из Telegram для аналитики
         tgMessageId = result?.message_id ? String(result.message_id) : null;
         await Log.add(wid, "publish_success", "telegram", `Пост #${post.id} → ${post.handle}`);
         results.success.push(platform);
 
       } else if (platform === "threads" && post.token && post.threads_user_id) {
-        const result = await threads.publishPost(post.threads_user_id, post.token, post.text);
+        const result = await threads.publishPost(post.threads_user_id, post.token, post.text, post.media_url);
         // Сохраняем ID поста из Threads для аналитики
         threadsPostId = result?.post_id ? String(result.post_id) : null;
         await Log.add(wid, "publish_success", "threads", `Пост #${post.id} → ${post.handle}`);
@@ -39,7 +44,7 @@ async function publishPost(post) {
 
       } else if (platform === "linkedin" && post.token && post.channel_id) {
         // channel_id хранит LinkedIn person URN id
-        const result = await linkedin.publishPost(post.channel_id, post.token, post.text);
+        const result = await linkedin.publishPost(post.channel_id, post.token, post.text, post.media_url);
         await Log.add(wid, "publish_success", "linkedin", `Пост #${post.id} → ${post.handle}`);
         results.success.push(platform);
 
