@@ -1,6 +1,249 @@
 // v2 — clean encoding fix 2026-03-24
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+
+// ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
+const DICTS = {
+  ru: {
+    generator: "✨ Генератор",
+    smart_replies: "💬 Умные ответы",
+    schedule: "📅 Планировщик",
+    analytics: "📈 Аналитика",
+    accounts: "📱 Аккаунты",
+    logs: "📊 Логи",
+    admin: "⚙️ Администратор",
+    lang_btn: "🇷🇺 RU",
+    gen_err_topic: "Укажи тему поста",
+    gen_success: "Пост сгенерирован!",
+    gen_usage: "Генераций: ",
+    gen_acc_label: "Аккаунт (необязательно)",
+    gen_acc_none: "— Без привязки к аккаунту —",
+    gen_topic_label: "Тема поста *",
+    gen_topic_ph: "Например: почему клиенты уходят к конкурентам",
+    gen_tone_label: "Тональность",
+    gen_format_label: "Формат (необязательно)",
+    gen_format_ph: "список, история, факт+мнение...",
+    gen_idea_label: "Идея / контекст",
+    gen_idea_ph: "Дополнительный контекст для AI...",
+    gen_btn_load: "⏳ Генерирую...",
+    gen_btn: "✨ Сгенерировать",
+    gen_res_title: "Результат",
+    gen_copy: "Копировать",
+    gen_copied: "Скопировано!",
+    gen_chars: "символов",
+    gen_limit_warn: "⚠️ Превышает лимит Threads (500)",
+    gen_empty: "Результат появится здесь",
+    sch_title: "📅 Планировщик",
+    sch_new_post: "Новый пост",
+    sch_err_acc_text: "Выбери аккаунт и введи текст",
+    sch_acc: "Аккаунт",
+    sch_acc_none: "— Выбери аккаунт —",
+    sch_date: "Дата",
+    sch_time: "Время",
+    sch_platforms: "Платформы",
+    sch_text: "Текст поста",
+    sch_text_ph: "Введи или вставь текст поста...",
+    sch_btn_save: "📅 Запланировать",
+    sch_btn_saving: "Сохраняю...",
+    sch_btn_pub: "⚡ Опубликовать сейчас",
+    sch_btn_pubing: "Публикую...",
+    sch_success_plan: "Пост запланирован!",
+    sch_success_pub: "✅ Опубликовано!",
+    sch_warn_pub: "⚠️ Частично опубликовано — проверь логи",
+    sch_queue: "Очередь постов",
+    sch_del_failed: "Удалить все провальные посты?",
+    sch_del_btn: "🗑 Удалить все ошибки",
+    sch_deleted: "🗑 Удалено",
+    sch_err_metrics: "Не удалось обновить метрики",
+    sch_loading: "Загрузка...",
+    sch_empty_queue: "Нет запланированных постов",
+    sch_retry_plan: "🔄 Повтор запланирован через 1 мин!",
+    sch_retry_btn: "↩ Повторить",
+    status_pub: "Опубликован",
+    status_sch: "Запланирован",
+    status_err: "Ошибка",
+    status_part_err: "Частичная ошибка",
+    acc_title: "📱 Аккаунты",
+    acc_connect_threads: "🧵 Подключить Threads через Meta",
+    acc_connect_linkedin: "💼 Подключить LinkedIn",
+    acc_add_manual: "+ Добавить вручную",
+    acc_new: "Новый аккаунт",
+    acc_platform: "Платформа",
+    acc_name: "Название аккаунта",
+    acc_icon: "Иконка (emoji)",
+    acc_token_tg: "Bot Token (опционально)",
+    acc_token_other: "Access Token",
+    acc_threads_hint: "ℹ️ Рекомендуем использовать кнопку «Давай Meta выше — токен сохранится автоматически на 60 дней».",
+    acc_threads_hint2: "Мануально можно вставить токен ниже (1 час):",
+    acc_save: "Сохранить",
+    acc_cancel: "Отмена",
+    acc_empty: "Нет добавленных аккаунтов",
+    acc_status_active: "Токен активен",
+    acc_status_end: "Истёк",
+    acc_status_days: "Срок: {days} дн.",
+    acc_ap_on: "Автопилот ВКЛ",
+    acc_ap_off: "Автопилот ВЫКЛ",
+    acc_ap_settings: "⚙️ Настройки Автопилота",
+    acc_ap_enable: "Включить автопилот",
+    acc_ap_desc: "5 постов в день автоматически",
+    acc_ap_focus: "О чём ваш блог? (темы, стиль, ключевые слова)",
+    acc_ap_prompt: "Стиль AI (Tone of Voice)",
+    acc_ap_schedule: "📅 Система генерирует 5 постов в день: 09:00, 12:00, 16:00, 19:00, 22:00 (Ташкент ±15 мин)",
+    acc_ap_save: "💾 Сохранить",
+    acc_ap_saving: "Сохраняю...",
+    acc_ap_run: "🚀 Запустить сейчас",
+    acc_ap_running: "Генерирую...",
+    an_title: "📈 Аналитика постов",
+    an_pdf: "📄 Скачать PDF-отчёт",
+    an_pdf_lock: "🔒 PDF-отчёт (Agency)",
+    an_empty: "Нет опубликованных постов. Метрики появятся после первой публикации.",
+    an_wait_metrics: "Метрики ещё не собраны",
+    an_updated: "Обновлено:",
+    log_title: "📊 Логи активности",
+    log_loading: "Загрузка...",
+    log_empty: "Нет записей в логах",
+    adm_title: "⚙️ Администратор",
+    adm_users: "Пользователей",
+    adm_active: "Активных",
+    adm_trial: "На триале",
+    adm_posts: "Всего постов",
+    adm_table: "Пользователи",
+    sr_title: "💬 Умные ответы",
+    sr_desc: "Вставьте текст поста, чтобы получить 3 варианта комментария для Threads. Безопасный ручной режим.",
+    sr_acc_label: "Аккаунт (Стиль ответов)",
+    sr_acc_none: "🤖 Без индивидуального стиля",
+    sr_text_label: "Текст поста для ответа",
+    sr_text_ph: "Вставьте текст или мысль поста...",
+    sr_btn: "Сгенерировать 3 варианта",
+    sr_btn_load: "Генерация ответа...",
+    sr_copied: "Скопировано!",
+    sr_copy: "Копировать",
+    side_ai: "AI Автопостинг",
+    side_lang: "Язык / Til:",
+    side_logout: "Выйти"
+  },
+  uz: {
+    generator: "✨ Generator",
+    smart_replies: "💬 Aqlli javoblar",
+    schedule: "📅 Rejalashtiruvchi",
+    analytics: "📈 Analitika",
+    accounts: "📱 Akkauntlar",
+    logs: "📊 Jurnallar",
+    admin: "⚙️ Administrator",
+    lang_btn: "🇺🇿 UZ",
+    gen_err_topic: "Mavzuni kiriting",
+    gen_success: "Post yaratildi!",
+    gen_usage: "Yaratilgan: ",
+    gen_acc_label: "Akkaunt (ixtiyoriy)",
+    gen_acc_none: "— Akkauntsiz —",
+    gen_topic_label: "Post mavzusi *",
+    gen_topic_ph: "Masalan: nega mijozlar raqobatchilarga ketadi",
+    gen_tone_label: "Ohang",
+    gen_format_label: "Format (ixtiyoriy)",
+    gen_format_ph: "ro'yxat, hikoya, fakt+fikr...",
+    gen_idea_label: "G'oya / kontekst",
+    gen_idea_ph: "AI uchun qo'shimcha kontekst...",
+    gen_btn_load: "⏳ Yaratilmoqda...",
+    gen_btn: "✨ Yaratish",
+    gen_res_title: "Natija",
+    gen_copy: "Nusxalash",
+    gen_copied: "Nusxalandi!",
+    gen_chars: "belgi",
+    gen_limit_warn: "⚠️ Threads limitidan oshdi (500)",
+    gen_empty: "Natija shu yerda chiqadi",
+    sch_title: "📅 Rejalashtiruvchi",
+    sch_new_post: "Yangi post",
+    sch_err_acc_text: "Akkauntni tanlang va matn kiriting",
+    sch_acc: "Akkaunt",
+    sch_acc_none: "— Akkauntni tanlang —",
+    sch_date: "Sana",
+    sch_time: "Vaqt",
+    sch_platforms: "Platformalar",
+    sch_text: "Post matni",
+    sch_text_ph: "Post matnini kiriting yoki joylang...",
+    sch_btn_save: "📅 Rejalashtirish",
+    sch_btn_saving: "Saqlanmoqda...",
+    sch_btn_pub: "⚡ Hozir nashr qilish",
+    sch_btn_pubing: "Nashr qilinmoqda...",
+    sch_success_plan: "Post rejalashtirildi!",
+    sch_success_pub: "✅ Nashr qilindi!",
+    sch_warn_pub: "⚠️ Qisman nashr qilindi — jurnallarni tekshiring",
+    sch_queue: "Postlar navbati",
+    sch_del_failed: "Barcha xatolarni o'chirib tashlaysizmi?",
+    sch_del_btn: "🗑 Barcha xatolarni o'chirish",
+    sch_deleted: "🗑 O'chirildi",
+    sch_err_metrics: "Ko'rsatkichlarni yangilab bo'lmadi",
+    sch_loading: "Yuklanmoqda...",
+    sch_empty_queue: "Rejalashtirilgan postlar yo'q",
+    sch_retry_plan: "🔄 Takrorlash 1 daqiqadan so'ng rejalashtirildi!",
+    sch_retry_btn: "↩ Takrorlash",
+    status_pub: "Nashr qilindi",
+    status_sch: "Rejalashtirildi",
+    status_err: "Xato",
+    status_part_err: "Qisman xato",
+    acc_title: "📱 Akkauntlar",
+    acc_connect_threads: "🧵 Meta orqali Threads ulash",
+    acc_connect_linkedin: "💼 LinkedIn ulash",
+    acc_add_manual: "+ Qo'lda qo'shish",
+    acc_new: "Yangi akkaunt",
+    acc_platform: "Platforma",
+    acc_name: "Akkaunt nomi",
+    acc_icon: "Ikonka (emoji)",
+    acc_token_tg: "Bot Token (ixtiyoriy)",
+    acc_token_other: "Access Token",
+    acc_threads_hint: "ℹ️ Yuqoridagi Meta tugmasidan foydalanishni tavsiya qilamiz.",
+    acc_threads_hint2: "Qo'lda quyida tokenni kiritishingiz mumkin (1 soat):",
+    acc_save: "Saqlash",
+    acc_cancel: "Bekor qilish",
+    acc_empty: "Akkauntlar qo'shilmagan",
+    acc_status_active: "Token faol",
+    acc_status_end: "Muddati tugagan",
+    acc_status_days: "Muddat: {days} kun",
+    acc_ap_on: "Avtopilot YONIQ",
+    acc_ap_off: "Avtopilot O'CHIRILGAN",
+    acc_ap_settings: "⚙️ Avtopilot sozlamalari",
+    acc_ap_enable: "Avtopilotni yoqish",
+    acc_ap_desc: "Kunda 5 ta post avtomatik",
+    acc_ap_focus: "Blogingiz nima haqida? (mavzular, uslub, kalit so'zlar)",
+    acc_ap_prompt: "AI Uslubi (Tone of Voice)",
+    acc_ap_schedule: "📅 Tizim kunda 5 ta post yaratadi: 09:00, 12:00, 16:00, 19:00, 22:00",
+    acc_ap_save: "💾 Saqlash",
+    acc_ap_saving: "Saqlanmoqda...",
+    acc_ap_run: "🚀 Hozir ishga tushirish",
+    acc_ap_running: "Yaratilmoqda...",
+    an_title: "📈 Postlar analitikasi",
+    an_pdf: "📄 PDF-hisobot yuklash",
+    an_pdf_lock: "🔒 PDF-hisobot (Agency)",
+    an_empty: "Nashr qilingan postlar yo'q.",
+    an_wait_metrics: "Metrikalar hali yig'ilmadi",
+    an_updated: "Yangilandi:",
+    log_title: "📊 Faollik jurnali",
+    log_loading: "Yuklanmoqda...",
+    log_empty: "Jurnalda yozuvlar yo'q",
+    adm_title: "⚙️ Administrator",
+    adm_users: "Jami foydalanuvchilar",
+    adm_active: "Faol",
+    adm_trial: "Sinov muddatida",
+    adm_posts: "Jami postlar",
+    adm_table: "Foydalanuvchilar",
+    sr_title: "💬 Aqlli javoblar",
+    sr_desc: "Threads uchun 3 xil variantda javob olish.",
+    sr_acc_label: "Akkaunt (Javob uslubi)",
+    sr_acc_none: "🤖 Uslubsiz",
+    sr_text_label: "Javob berish uchun post matni",
+    sr_text_ph: "Post yoki fikrni joylang...",
+    sr_btn: "3 variant yaratish",
+    sr_btn_load: "Javob yaratilmoqda...",
+    sr_copied: "Nusxalandi!",
+    sr_copy: "Nusxalash",
+    side_ai: "AI Avtoposting",
+    side_lang: "Til / Til:",
+    side_logout: "Chiqish"
+  }
+};
+
+const I18nContext = createContext();
+export const useI18n = () => useContext(I18nContext);
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const API_URL = "https://backend-production-49e4.up.railway.app";
@@ -203,14 +446,16 @@ function LoginScreen({ onLogin }) {
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
+  const { t, lang, changeLang } = useI18n();
+
   const items = [
-    { id: "generator", icon: "✨", label: "Генератор" },
-    { id: "smart_replies", icon: "💬", label: "Умные ответы" },
-    { id: "schedule", icon: "📅", label: "Планировщик" },
-    { id: "analytics", icon: "📈", label: "Аналитика" },
-    { id: "accounts", icon: "📱", label: "Аккаунты" },
-    { id: "logs", icon: "📊", label: "Логи" },
-    ...(user?.role === "admin" ? [{ id: "admin", icon: "⚙️", label: "Администратор" }] : []),
+    { id: "generator", icon: "✨", label: t("generator") },
+    { id: "smart_replies", icon: "💬", label: t("smart_replies") },
+    { id: "schedule", icon: "📅", label: t("schedule") },
+    { id: "analytics", icon: "📈", label: t("analytics") },
+    { id: "accounts", icon: "📱", label: t("accounts") },
+    { id: "logs", icon: "📊", label: t("logs") },
+    ...(user?.role === "admin" ? [{ id: "admin", icon: "⚙️", label: t("admin") }] : []),
   ];
 
   const handleNav = (id) => { onNav(id); if (isMobile && onClose) onClose(); };
@@ -226,7 +471,7 @@ function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
       <div style={{ padding: "16px 20px 16px", borderBottom: "1px solid #21262d", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 900 }}>⚡ SellForce</div>
-          <div style={{ ...S.muted, fontSize: 12, marginTop: 2 }}>AI Автопостинг</div>
+          <div style={{ ...S.muted, fontSize: 12, marginTop: 2 }}>{t("side_ai")}</div>
         </div>
         {isMobile && <button onClick={onClose} style={{ background: "none", border: "none", color: "#8b949e", fontSize: 22, cursor: "pointer", padding: 4, lineHeight: 1 }}>✕</button>}
       </div>
@@ -234,9 +479,13 @@ function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
         {items.map(navItem)}
       </div>
       <div style={{ padding: "16px 20px", borderTop: "1px solid #21262d" }}>
+        <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#8b949e" }}>{t("side_lang")}</div>
+          <button onClick={() => changeLang(lang === 'ru' ? 'uz' : 'ru')} style={{ ...S.btnGhost, padding: "4px 10px", fontSize: 12 }}>{t('lang_btn')}</button>
+        </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", marginBottom: 2 }}>{user?.name}</div>
         <div style={{ ...S.muted, fontSize: 11, marginBottom: 12 }}>{user?.plan?.toUpperCase()}</div>
-        <button onClick={onLogout} style={{ ...S.btnGhost, fontSize: 12, padding: "6px 12px", width: "100%" }}>Выйти</button>
+        <button onClick={onLogout} style={{ ...S.btnGhost, fontSize: 12, padding: "6px 12px", width: "100%" }}>{t("side_logout")}</button>
       </div>
     </div>
   );
@@ -263,6 +512,7 @@ function Sidebar({ user, active, onNav, onLogout, isMobile, isOpen, onClose }) {
 
 // ─── GENERATOR VIEW ───────────────────────────────────────────────────────────
 function GeneratorView({ accounts, usage, limits, toast }) {
+  const { t } = useI18n();
   const api = useApi();
   const [accountId, setAccountId] = useState("");
   const [topic, setTopic] = useState("");
@@ -273,12 +523,12 @@ function GeneratorView({ accounts, usage, limits, toast }) {
   const [loading, setLoading] = useState(false);
 
   async function generate() {
-    if (!topic) return toast.show("Укажи тему поста", "error");
+    if (!topic) return toast.show(t("gen_err_topic"), "error");
     setLoading(true);
     try {
       const data = await api.post("/api/generate", { account_id: accountId ? parseInt(accountId) : null, topic, tone, format, idea });
       setResult(data.text);
-      toast.show("Пост сгенерирован!");
+      toast.show(t("gen_success"));
     } catch (err) {
       toast.show(err.message, "error");
     } finally {
@@ -291,9 +541,9 @@ function GeneratorView({ accounts, usage, limits, toast }) {
   return (
     <div style={{ ...S.col, gap: 24 }}>
       <div style={{ ...S.row, justifyContent: "space-between" }}>
-        <div style={S.h2}>✨ AI Генератор</div>
+        <div style={S.h2}>{t("generator")}</div>
         <div style={{ ...S.card, padding: "10px 16px" }}>
-          <span style={S.muted}>Генераций: </span>
+          <span style={S.muted}>{t("gen_usage")}</span>
           <span style={{ fontWeight: 700, color: pct > 80 ? "#f85149" : "#00d4aa" }}>{usage?.generations || 0}/{limits?.generationsPerMonth || "?"}</span>
         </div>
       </div>
@@ -302,47 +552,47 @@ function GeneratorView({ accounts, usage, limits, toast }) {
         <div style={S.card}>
           <div style={{ ...S.col, gap: 16 }}>
             <div>
-              <label style={S.label}>Аккаунт (необязательно)</label>
+              <label style={S.label}>{t("gen_acc_label")}</label>
               <select style={S.select} value={accountId} onChange={e => setAccountId(e.target.value)}>
-                <option value="">— Без привязки к аккаунту —</option>
+                <option value="">{t("gen_acc_none")}</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
               </select>
             </div>
 
             <div>
-              <label style={S.label}>Тема поста *</label>
-              <input style={S.input} value={topic} onChange={e => setTopic(e.target.value)} placeholder="Например: почему клиенты уходят к конкурентам" />
+              <label style={S.label}>{t("gen_topic_label")}</label>
+              <input style={S.input} value={topic} onChange={e => setTopic(e.target.value)} placeholder={t("gen_topic_ph")} />
             </div>
 
             <div>
-              <label style={S.label}>Тональность</label>
+              <label style={S.label}>{t("gen_tone_label")}</label>
               <select style={S.select} value={tone} onChange={e => setTone(e.target.value)}>
-                {["авторский", "провокационный", "экспертный", "дружеский", "жёсткий"].map(t => <option key={t}>{t}</option>)}
+                {["авторский", "провокационный", "экспертный", "дружеский", "жёсткий"].map(tn => <option key={tn}>{tn}</option>)}
               </select>
             </div>
 
             <div>
-              <label style={S.label}>Формат (необязательно)</label>
-              <input style={S.input} value={format} onChange={e => setFormat(e.target.value)} placeholder="список, история, факт+мнение..." />
+              <label style={S.label}>{t("gen_format_label")}</label>
+              <input style={S.input} value={format} onChange={e => setFormat(e.target.value)} placeholder={t("gen_format_ph")} />
             </div>
 
             <div>
-              <label style={S.label}>Идея / контекст</label>
-              <textarea style={{ ...S.textarea, minHeight: 80 }} value={idea} onChange={e => setIdea(e.target.value)} placeholder="Дополнительный контекст для AI..." />
+              <label style={S.label}>{t("gen_idea_label")}</label>
+              <textarea style={{ ...S.textarea, minHeight: 80 }} value={idea} onChange={e => setIdea(e.target.value)} placeholder={t("gen_idea_ph")} />
             </div>
 
             <button onClick={generate} style={{ ...S.btnPrimary, opacity: loading ? 0.7 : 1 }} disabled={loading}>
-              {loading ? "⏳ Генерирую..." : "✨ Сгенерировать"}
+              {loading ? t("gen_btn_load") : t("gen_btn")}
             </button>
           </div>
         </div>
 
         <div style={S.card}>
           <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={S.h3}>Результат</div>
+            <div style={S.h3}>{t("gen_res_title")}</div>
             {result && (
               <div style={{ ...S.row, gap: 8 }}>
-                <button onClick={() => { navigator.clipboard.writeText(result); toast.show("Скопировано!"); }} style={{ ...S.btnGhost, fontSize: 12, padding: "6px 12px" }}>Копировать</button>
+                <button onClick={() => { navigator.clipboard.writeText(result); toast.show(t("gen_copied")); }} style={{ ...S.btnGhost, fontSize: 12, padding: "6px 12px" }}>{t("gen_copy")}</button>
               </div>
             )}
           </div>
@@ -350,14 +600,14 @@ function GeneratorView({ accounts, usage, limits, toast }) {
             <div>
               <div style={{ background: "#161b22", borderRadius: 12, padding: 16, fontSize: 15, lineHeight: 1.6, color: "#e6edf3", whiteSpace: "pre-wrap", border: "1px solid #30363d" }}>{result}</div>
               <div style={{ ...S.row, justifyContent: "space-between", marginTop: 8 }}>
-                <span style={{ ...S.muted, fontSize: 12 }}>{result.length} символов</span>
-                {result.length > 500 && <span style={{ color: "#f85149", fontSize: 12 }}>⚠️ Превышает лимит Threads (500)</span>}
+                <span style={{ ...S.muted, fontSize: 12 }}>{result.length} {t("gen_chars")}</span>
+                {result.length > 500 && <span style={{ color: "#f85149", fontSize: 12 }}>{t("gen_limit_warn")}</span>}
               </div>
             </div>
           ) : (
             <div style={{ ...S.center, height: 200, color: "#30363d", fontSize: 40, flexDirection: "column", gap: 12 }}>
               <span>✨</span>
-              <span style={{ fontSize: 13, color: "#8b949e" }}>Результат появится здесь</span>
+              <span style={{ fontSize: 13, color: "#8b949e" }}>{t("gen_empty")}</span>
             </div>
           )}
         </div>
@@ -368,6 +618,7 @@ function GeneratorView({ accounts, usage, limits, toast }) {
 
 // ─── SCHEDULE VIEW ────────────────────────────────────────────────────────────
 function ScheduleView({ accounts, toast, user }) {
+  const { t } = useI18n();
   const api = useApi();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -389,20 +640,20 @@ function ScheduleView({ accounts, toast, user }) {
   }
 
   async function deleteAllFailed() {
-    if (!window.confirm("Удалить все провальные посты?")) return;
+    if (!window.confirm(t("sch_del_failed"))) return;
     try {
       const r = await api.del("/api/posts/failed");
-      toast.show(`🗑 Удалено ${r.deleted} постов`);
+      toast.show(`${t("sch_deleted")} ${r.deleted}`);
       load();
     } catch (err) { toast.show(err.message, "error"); }
   }
 
   async function schedule() {
-    if (!accountId || !text) return toast.show("Выбери аккаунт и введи текст", "error");
+    if (!accountId || !text) return toast.show(t("sch_err_acc_text"), "error");
     setSaving(true);
     try {
       await api.post("/api/posts", { account_id: parseInt(accountId), text, platforms, scheduled_at: `${date}T${time}:00+05:00` });
-      toast.show("Пост запланирован!");
+      toast.show(t("sch_success_plan"));
       setText(""); load();
     } catch (err) { toast.show(err.message, "error"); }
     finally { setSaving(false); }
@@ -413,51 +664,51 @@ function ScheduleView({ accounts, toast, user }) {
     try {
       const data = await api.get(`/api/posts/${postId}/stats`);
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, metrics: data.metrics, last_stats_update: data.last_stats_update } : p));
-    } catch { toast.show("Не удалось обновить метрики", "error"); }
+    } catch { toast.show(t("sch_err_metrics"), "error"); }
   }
 
   async function publishNow() {
-    if (!accountId || !text) return toast.show("Выбери аккаунт и введи текст", "error");
+    if (!accountId || !text) return toast.show(t("sch_err_acc_text"), "error");
     setPublishingNow(true);
     try {
       const data = await api.post("/api/posts/publish-now", { account_id: parseInt(accountId), text, platforms });
       const allOk = data.results.every(r => r.ok);
-      toast.show(allOk ? "✅ Опубликовано!" : "⚠️ Частично опубликовано — проверь логи", allOk ? "success" : "error");
+      toast.show(allOk ? t("sch_success_pub") : t("sch_warn_pub"), allOk ? "success" : "error");
       setText("");
     } catch (err) { toast.show(err.message, "error"); }
     finally { setPublishingNow(false); }
   }
 
   const STATUS_COLORS = { published: "#00d4aa", scheduled: "#79c0ff", failed: "#f85149", partially_failed: "#f0722a" };
-  const STATUS_LABELS = { published: "Опубликован", scheduled: "Запланирован", failed: "Ошибка", partially_failed: "Частичная ошибка" };
+  const STATUS_LABELS = { published: t("status_pub"), scheduled: t("status_sch"), failed: t("status_err"), partially_failed: t("status_part_err") };
 
   return (
     <div style={{ ...S.col, gap: 24 }}>
-      <div style={S.h2}>📅 Планировщик</div>
+      <div style={S.h2}>{t("sch_title")}</div>
 
       <div style={S.card}>
-        <div style={{ ...S.h3, marginBottom: 16 }}>Новый пост</div>
+        <div style={{ ...S.h3, marginBottom: 16 }}>{t("sch_new_post")}</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div style={{ ...S.col, gap: 12 }}>
             <div>
-              <label style={S.label}>Аккаунт</label>
+              <label style={S.label}>{t("sch_acc")}</label>
               <select style={S.select} value={accountId} onChange={e => setAccountId(e.target.value)}>
-                <option value="">— Выбери аккаунт —</option>
+                <option value="">{t("sch_acc_none")}</option>
                 {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name}</option>)}
               </select>
             </div>
             <div style={{ ...S.row, gap: 12 }}>
               <div style={{ flex: 1 }}>
-                <label style={S.label}>Дата</label>
+                <label style={S.label}>{t("sch_date")}</label>
                 <input style={S.input} type="date" value={date} onChange={e => setDate(e.target.value)} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={S.label}>Время</label>
+                <label style={S.label}>{t("sch_time")}</label>
                 <input style={S.input} type="time" value={time} onChange={e => setTime(e.target.value)} />
               </div>
             </div>
             <div>
-              <label style={S.label}>Платформы</label>
+              <label style={S.label}>{t("sch_platforms")}</label>
               <div style={{ ...S.row, gap: 12 }}>
                 {["telegram", "threads", "linkedin"].map(p => (
                   <label key={p} style={{ ...S.row, gap: 6, cursor: "pointer", fontSize: 13, color: "#e6edf3" }}>
@@ -470,8 +721,8 @@ function ScheduleView({ accounts, toast, user }) {
           </div>
           <div style={{ ...S.col, gap: 12 }}>
             <div>
-              <label style={S.label}>Текст поста</label>
-              <textarea style={{ ...S.textarea, minHeight: 130 }} value={text} onChange={e => setText(e.target.value)} placeholder="Введи или вставь текст поста..." />
+              <label style={S.label}>{t("sch_text")}</label>
+              <textarea style={{ ...S.textarea, minHeight: 130 }} value={text} onChange={e => setText(e.target.value)} placeholder={t("sch_text_ph")} />
               <div style={{ ...S.row, justifyContent: "space-between", marginTop: 4 }}>
                 <span style={{ fontSize: 12, color: text.length > 500 ? "#f85149" : "#8b949e" }}>{text.length}/500</span>
               </div>
@@ -480,23 +731,23 @@ function ScheduleView({ accounts, toast, user }) {
         </div>
         <div style={{ ...S.row, gap: 12, marginTop: 16 }}>
           <button onClick={schedule} style={{ ...S.btnPrimary, opacity: saving ? 0.7 : 1 }} disabled={saving}>
-            {saving ? "Сохраняю..." : "📅 Запланировать"}
+            {saving ? t("sch_btn_saving") : t("sch_btn_save")}
           </button>
           <button onClick={publishNow} style={{ ...S.btnGhost, opacity: publishingNow ? 0.7 : 1 }} disabled={publishingNow}>
-            {publishingNow ? "Публикую..." : "⚡ Опубликовать сейчас"}
+            {publishingNow ? t("sch_btn_pubing") : t("sch_btn_pub")}
           </button>
         </div>
       </div>
 
       <div style={S.card}>
         <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 16 }}>
-          <div style={S.h3}>Очередь постов</div>
+          <div style={S.h3}>{t("sch_queue")}</div>
           {posts.some(p => ["failed", "partially_failed"].includes(p.status)) && (
-            <button onClick={deleteAllFailed} style={{ ...S.btnDanger, padding: "6px 12px", fontSize: 12 }}>🗑 Удалить все ошибки</button>
+            <button onClick={deleteAllFailed} style={{ ...S.btnDanger, padding: "6px 12px", fontSize: 12 }}>{t("sch_del_btn")}</button>
           )}
         </div>
-        {loading ? <div style={S.muted}>Загрузка...</div> : posts.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#8b949e" }}>Нет запланированных постов</div>
+        {loading ? <div style={S.muted}>{t("sch_loading")}</div> : posts.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#8b949e" }}>{t("sch_empty_queue")}</div>
         ) : (
           <div style={{ ...S.col, gap: 8 }}>
             {posts.map(p => {
@@ -530,7 +781,7 @@ function ScheduleView({ accounts, toast, user }) {
                       <button onClick={() => refreshStats(p.id)} title="Обновить метрики" style={{ ...S.btnGhost, padding: "4px 8px", fontSize: 12 }}>🔄</button>
                     )}
                     {(p.status === "failed" || p.status === "partially_failed") && (
-                      <button onClick={async () => { await api.post(`/api/posts/${p.id}/retry`, {}); load(); toast.show("🔄 Повтор запланирован через 1 мин!"); }} style={{ ...S.btnGhost, padding: "4px 8px", fontSize: 11, borderColor: "#f0722a", color: "#f0722a" }}>↩ Повторить</button>
+                      <button onClick={async () => { await api.post(`/api/posts/${p.id}/retry`, {}); load(); toast.show(t("sch_retry_plan")); }} style={{ ...S.btnGhost, padding: "4px 8px", fontSize: 11, borderColor: "#f0722a", color: "#f0722a" }}>{t("sch_retry_btn")}</button>
                     )}
                     <button onClick={async () => { await api.del(`/api/posts/${p.id}`); load(); }} style={{ ...S.btnDanger, padding: "4px 8px", fontSize: 12 }}>✕</button>
                   </div>
@@ -566,6 +817,7 @@ const TOKEN_STATUS_CONFIG = {
 
 // ─── ACCOUNTS VIEW ────────────────────────────────────────────────────────────
 function AccountsView({ accounts, setAccounts, toast }) {
+  const { t } = useI18n();
   const api = useApi();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ platform: "telegram", handle: "", name: "", color: "#00d4aa", icon: "📱", token: "", channel_id: "", threads_user_id: "" });
@@ -585,7 +837,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
       setAccounts(prev => [...prev, data.account]);
       setAdding(false);
       setForm({ platform: "telegram", handle: "", name: "", color: "#00d4aa", icon: "📱", token: "", channel_id: "", threads_user_id: "" });
-      toast.show("Аккаунт добавлен!");
+      toast.show(t("sch_success_plan") ? "Аккаунт добавлен!" : "Аккаунт добавлен!"); // generic
     } catch (err) { toast.show(err.message, "error"); }
   }
 
@@ -593,7 +845,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
     if (!window.confirm("Удалить аккаунт?")) return;
     await api.del(`/api/accounts/${id}`);
     setAccounts(prev => prev.filter(a => a.id !== id));
-    toast.show("Аккаунт удалён");
+    toast.show(t("sch_deleted") || "Удалено");
   }
 
   async function saveAutopilot(a) {
@@ -626,7 +878,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
   return (
     <div style={{ ...S.col, gap: 24 }}>
       <div style={{ ...S.row, justifyContent: "space-between" }}>
-        <div style={S.h2}>📱 Аккаунты</div>
+        <div style={S.h2}>{t("acc_title")}</div>
         <div style={{ ...S.row, gap: 8 }}>
           <button
             onClick={() => {
@@ -635,7 +887,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
             }}
             style={{ ...S.btnGhost, fontSize: 12, padding: "10px 16px", borderColor: "#444", display: "flex", alignItems: "center", gap: 6 }}
           >
-            🧵 Подключить Threads через Meta
+            {t("acc_connect_threads")}
           </button>
           <button
             onClick={() => {
@@ -644,19 +896,19 @@ function AccountsView({ accounts, setAccounts, toast }) {
             }}
             style={{ ...S.btnGhost, fontSize: 12, padding: "10px 16px", borderColor: "#0077B5", color: "#0077B5", display: "flex", alignItems: "center", gap: 6 }}
           >
-            💼 Подключить LinkedIn
+            {t("acc_connect_linkedin")}
           </button>
-          <button onClick={() => setAdding(!adding)} style={S.btnPrimary}>+ Добавить вручную</button>
+          <button onClick={() => setAdding(!adding)} style={S.btnPrimary}>{t("acc_add_manual")}</button>
         </div>
       </div>
 
       {adding && (
         <div style={S.card}>
-          <div style={{ ...S.h3, marginBottom: 16 }}>Новый аккаунт</div>
+          <div style={{ ...S.h3, marginBottom: 16 }}>{t("acc_new")}</div>
           <form onSubmit={save}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={S.label}>Платформа</label>
+                <label style={S.label}>{t("acc_platform")}</label>
                 <select style={S.select} value={form.platform} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}>
                   <option value="telegram">✈️ Telegram</option>
                   <option value="threads">🧵 Threads</option>
@@ -667,19 +919,19 @@ function AccountsView({ accounts, setAccounts, toast }) {
                 <input style={S.input} value={form.handle} onChange={e => setForm(f => ({ ...f, handle: e.target.value }))} placeholder="@sellforce_uz" required />
               </div>
               <div>
-                <label style={S.label}>Название аккаунта</label>
+                <label style={S.label}>{t("acc_name")}</label>
                 <input style={S.input} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="SellForce CRM" required />
               </div>
               <div>
-                <label style={S.label}>Иконка (emoji)</label>
+                <label style={S.label}>{t("acc_icon")}</label>
                 <input style={S.input} value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder="📱" />
               </div>
               <div>
-                <label style={S.label}>{form.platform === "telegram" ? "Bot Token (опционально)" : "Access Token"}</label>
+                <label style={S.label}>{form.platform === "telegram" ? t("acc_token_tg") : t("acc_token_other")}</label>
                 {form.platform === "threads" ? (
                   <div style={{ background: "#00d4aa12", border: "1px solid #00d4aa44", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#00d4aa" }}>
-                    ℹ️ Рекомендуем использовать кнопку «Давай Meta выше — токен сохранится автоматически на 60 дней».
-                    <br /><span style={{ color: "#8b949e" }}>Мануально можно вставить токен ниже (1 час):</span>
+                    {t("acc_threads_hint")}
+                    <br /><span style={{ color: "#8b949e" }}>{t("acc_threads_hint2")}</span>
                   </div>
                 ) : null}
                 <input style={{ ...S.input, marginTop: form.platform === "threads" ? 8 : 0 }} value={form.token} onChange={e => setForm(f => ({ ...f, token: e.target.value }))} placeholder={form.platform === "telegram" ? "Используется глобальный токен из .env" : "Вставь вручную EAAxxxxx... (необязательно)"} />
@@ -690,8 +942,8 @@ function AccountsView({ accounts, setAccounts, toast }) {
               </div>
             </div>
             <div style={{ ...S.row, gap: 12, marginTop: 16 }}>
-              <button type="submit" style={S.btnPrimary}>Сохранить</button>
-              <button type="button" onClick={() => setAdding(false)} style={S.btnGhost}>Отмена</button>
+              <button type="submit" style={S.btnPrimary}>{t("acc_save")}</button>
+              <button type="button" onClick={() => setAdding(false)} style={S.btnGhost}>{t("acc_cancel")}</button>
             </div>
           </form>
         </div>
@@ -699,7 +951,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
         {accounts.length === 0 ? (
-          <div style={{ ...S.card, textAlign: "center", color: "#8b949e", padding: 40 }}>Нет добавленных аккаунтов</div>
+          <div style={{ ...S.card, textAlign: "center", color: "#8b949e", padding: 40 }}>{t("acc_empty")}</div>
         ) : accounts.map(a => {
           const ts = getTokenStatus(a);
           const tsCfg = TOKEN_STATUS_CONFIG[ts];
@@ -729,12 +981,14 @@ function AccountsView({ accounts, setAccounts, toast }) {
                 background: tsCfg.color + "18", borderRadius: 8, padding: "6px 10px"
               }}>
                 <span style={{ fontSize: 14 }}>{tsCfg.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: tsCfg.color }}>{tsCfg.label}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: tsCfg.color }}>
+                  {ts === "active" ? t("acc_status_active") : tsCfg.label}
+                </span>
                 {daysLeft !== null && daysLeft >= 0 && (
-                  <span style={{ ...S.muted, fontSize: 11, marginLeft: "auto" }}>Срок: {daysLeft} дн.</span>
+                  <span style={{ ...S.muted, fontSize: 11, marginLeft: "auto" }}>{t("acc_status_days").replace("{days}", daysLeft)}</span>
                 )}
                 {daysLeft !== null && daysLeft < 0 && (
-                  <span style={{ ...S.muted, fontSize: 11, marginLeft: "auto", color: "#f85149" }}>Истёк</span>
+                  <span style={{ ...S.muted, fontSize: 11, marginLeft: "auto", color: "#f85149" }}>{t("acc_status_end")}</span>
                 )}
               </div>
               <div style={{ ...S.muted, fontSize: 12, marginBottom: 12 }}>
@@ -752,19 +1006,19 @@ function AccountsView({ accounts, setAccounts, toast }) {
                   color: a.autopilot_enabled ? "#00d4aa" : "#8b949e"
                 }}
               >
-                🤖 {a.autopilot_enabled ? "Автопилот ВКЛ" : "Автопилот ВЫКЛ"} {isApOpen ? "▲" : "▼"}
+                🤖 {a.autopilot_enabled ? t("acc_ap_on") : t("acc_ap_off")} {isApOpen ? "▲" : "▼"}
               </button>
 
               {/* Панель автопилота */}
               {isApOpen && (
                 <div style={{ marginTop: 12, padding: 14, background: "#0d1117", borderRadius: 10, border: "1px solid #21262d" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: "#e6edf3" }}>⚙️ Настройки Автопилота</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: "#e6edf3" }}>{t("acc_ap_settings")}</div>
 
                   {/* Toggle */}
                   <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 12 }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>Включить автопилот</div>
-                      <div style={{ fontSize: 11, color: "#8b949e" }}>5 постов в день автоматически</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3" }}>{t("acc_ap_enable")}</div>
+                      <div style={{ fontSize: 11, color: "#8b949e" }}>{t("acc_ap_desc")}</div>
                     </div>
                     <div
                       onClick={() => setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, autopilot_enabled: !apf.autopilot_enabled } }))}
@@ -783,28 +1037,26 @@ function AccountsView({ accounts, setAccounts, toast }) {
 
                   {/* Content Focus */}
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ ...S.label, fontSize: 12 }}>О чём ваш блог? (темы, стиль, ключевые слова)</label>
+                    <label style={{ ...S.label, fontSize: 12 }}>{t("acc_ap_focus")}</label>
                     <textarea
                       style={{ ...S.textarea, minHeight: 70, fontSize: 12 }}
                       value={apf.content_focus}
                       onChange={e => setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, content_focus: e.target.value } }))}
-                      placeholder="Например: B2B продажи в Узбекистане, CRM системы, автоматизация бизнеса, кейсы клиентов..."
                     />
                   </div>
 
                   {/* Custom Prompt */}
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ ...S.label, fontSize: 12 }}>Стиль AI (Tone of Voice)</label>
+                    <label style={{ ...S.label, fontSize: 12 }}>{t("acc_ap_prompt")}</label>
                     <textarea
                       style={{ ...S.textarea, minHeight: 70, fontSize: 12 }}
                       value={apf.custom_prompt}
                       onChange={e => setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, custom_prompt: e.target.value } }))}
-                      placeholder="Например: Пиши дерзко, с юмором, без воды. Обращайся к предпринимателям на 'ты'."
                     />
                   </div>
 
                   <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 12 }}>
-                    📅 Система генерирует 5 постов в день: 09:00, 12:00, 16:00, 19:00, 22:00 (Ташкент ±15 мин)
+                    {t("acc_ap_schedule")}
                   </div>
 
                   <div style={{ ...S.row, gap: 8 }}>
@@ -813,14 +1065,14 @@ function AccountsView({ accounts, setAccounts, toast }) {
                       disabled={savingAutopilot[a.id]}
                       style={{ ...S.btnPrimary, flex: 1, fontSize: 12, padding: "9px", opacity: savingAutopilot[a.id] ? 0.7 : 1 }}
                     >
-                      {savingAutopilot[a.id] ? "Сохраняю..." : "💾 Сохранить"}
+                      {savingAutopilot[a.id] ? t("acc_ap_saving") : t("acc_ap_save")}
                     </button>
                     <button
                       onClick={() => triggerAutopilot(a)}
                       disabled={triggeringAutopilot[a.id]}
                       style={{ ...S.btnGhost, flex: 1, fontSize: 12, padding: "9px", opacity: triggeringAutopilot[a.id] ? 0.7 : 1 }}
                     >
-                      {triggeringAutopilot[a.id] ? "Генерирую..." : "🚀 Запустить сейчас"}
+                      {triggeringAutopilot[a.id] ? t("acc_ap_running") : t("acc_ap_run")}
                     </button>
                   </div>
                 </div>
@@ -835,6 +1087,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
 
 // ─── ANALYTICS VIEW ───────────────────────────────────────────────────────────
 function AnalyticsView({ toast, user }) {
+  const { t } = useI18n();
   const api = useApi();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -907,16 +1160,16 @@ function AnalyticsView({ toast, user }) {
       </div>
 
       <div style={{ ...S.row, justifyContent: "space-between" }}>
-        <div style={S.h2}>📈 Аналитика постов</div>
+        <div style={S.h2}>{t("an_title")}</div>
         {isAgency ? (
-          <button onClick={handlePrint} style={S.btnPrimary}>📄 Скачать PDF-отчёт</button>
+          <button onClick={handlePrint} style={S.btnPrimary}>{t("an_pdf")}</button>
         ) : (
-          <button disabled title="Доступно только на тарифе Agency" style={{ ...S.btnGhost, opacity: 0.45, cursor: "not-allowed" }}>🔒 PDF-отчёт (Agency)</button>
+          <button disabled title="Доступно только на тарифе Agency" style={{ ...S.btnGhost, opacity: 0.45, cursor: "not-allowed" }}>{t("an_pdf_lock")}</button>
         )}
       </div>
 
-      {loading ? <div style={S.muted}>Загрузка...</div> : posts.length === 0 ? (
-        <div style={{ ...S.card, textAlign: "center", color: "#8b949e", padding: 40 }}>Нет опубликованных постов. Метрики появятся после первой публикации.</div>
+      {loading ? <div style={S.muted}>{t("log_loading")}</div> : posts.length === 0 ? (
+        <div style={{ ...S.card, textAlign: "center", color: "#8b949e", padding: 40 }}>{t("an_empty")}</div>
       ) : (
         <div style={{ ...S.col, gap: 10 }}>
           {posts.map(p => {
@@ -940,12 +1193,12 @@ function AnalyticsView({ toast, user }) {
                       {m.threads?.likes !== undefined && <span style={{ fontSize: 12, color: "#f85149" }}>❤️ {m.threads.likes}</span>}
                       {m.threads?.replies !== undefined && <span style={{ fontSize: 12, color: "#00d4aa" }}>💬 {m.threads.replies}</span>}
                       {m.threads?.reposts !== undefined && <span style={{ fontSize: 12, color: "#d2a8ff" }}>🔄 {m.threads.reposts}</span>}
-                      {Object.keys(m).length === 0 && <span style={{ ...S.muted, fontSize: 12 }}>Метрики ещё не собраны (обновятся в течение 4 ч.)</span>}
+                      {Object.keys(m).length === 0 && <span style={{ ...S.muted, fontSize: 12 }}>{t("an_wait_metrics")}</span>}
                     </div>
                     {isPartial && p.error_log && <div style={{ marginTop: 6, fontSize: 11, color: "#f0722a" }}>⚠️ {p.error_log}</div>}
                   </div>
                   {p.last_stats_update && (
-                    <div style={{ ...S.muted, fontSize: 10, textAlign: "right", flexShrink: 0 }}>Обновлено:<br />{new Date(p.last_stats_update).toLocaleString("ru")}</div>
+                    <div style={{ ...S.muted, fontSize: 10, textAlign: "right", flexShrink: 0 }}>{t("an_updated")}<br />{new Date(p.last_stats_update).toLocaleString("ru")}</div>
                   )}
                 </div>
               </div>
@@ -959,6 +1212,7 @@ function AnalyticsView({ toast, user }) {
 
 // ─── LOGS VIEW ────────────────────────────────────────────────────────────────
 function LogsView() {
+  const { t } = useI18n();
   const api = useApi();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -971,10 +1225,10 @@ function LogsView() {
 
   return (
     <div style={{ ...S.col, gap: 20 }}>
-      <div style={S.h2}>📊 Логи активности</div>
+      <div style={S.h2}>{t("log_title")}</div>
       <div style={S.card}>
-        {loading ? <div style={S.muted}>Загрузка...</div> : logs.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#8b949e" }}>Нет записей в логах</div>
+        {loading ? <div style={S.muted}>{t("log_loading")}</div> : logs.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#8b949e" }}>{t("log_empty")}</div>
         ) : (
           <div style={{ ...S.col, gap: 0 }}>
             {logs.map((l, i) => (
@@ -996,6 +1250,7 @@ function LogsView() {
 
 // ─── ADMIN VIEW ───────────────────────────────────────────────────────────────
 function AdminView({ toast }) {
+  const { t } = useI18n();
   const api = useApi();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
@@ -1013,23 +1268,23 @@ function AdminView({ toast }) {
     } catch (err) { toast.show(err.message, "error"); }
   }
 
-  if (loading) return <div style={S.muted}>Загрузка...</div>;
+  if (loading) return <div style={S.muted}>{t("log_loading")}</div>;
 
   return (
     <div style={{ ...S.col, gap: 24 }}>
-      <div style={S.h2}>⚙️ Администратор</div>
+      <div style={S.h2}>{t("adm_title")}</div>
 
       {stats && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
-          <StatCard icon="👥" label="Всего пользователей" value={stats.total_users} />
-          <StatCard icon="✅" label="Активных" value={stats.active} />
-          <StatCard icon="⏳" label="На триале" value={stats.trial} />
-          <StatCard icon="📤" label="Всего постов" value={stats.total_posts} />
+          <StatCard icon="👥" label={t("adm_users")} value={stats.total_users} />
+          <StatCard icon="✅" label={t("adm_active")} value={stats.active} />
+          <StatCard icon="⏳" label={t("adm_trial")} value={stats.trial} />
+          <StatCard icon="📤" label={t("adm_posts")} value={stats.total_posts} />
         </div>
       )}
 
       <div style={S.card}>
-        <div style={{ ...S.h3, marginBottom: 16 }}>Пользователи</div>
+        <div style={{ ...S.h3, marginBottom: 16 }}>{t("adm_table")}</div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -1071,6 +1326,7 @@ function AdminView({ toast }) {
 
 // ─── SMART REPLIES VIEW ───────────────────────────────────────────────────────
 function SmartRepliesView({ accounts, toast }) {
+  const { t } = useI18n();
   const api = useApi();
   const [accountId, setAccountId] = useState("");
   const [text, setText] = useState("");
@@ -1084,7 +1340,7 @@ function SmartRepliesView({ accounts, toast }) {
     try {
       const data = await api.post("/api/comments/generate", { text, account_id: accountId ? parseInt(accountId) : null });
       setVariants(data.variants || []);
-      toast.show("Варианты сгенерированы!");
+      toast.show(t("sr_title"));
     } catch (err) {
       toast.show(err.message, "error");
     } finally {
@@ -1094,31 +1350,31 @@ function SmartRepliesView({ accounts, toast }) {
 
   function copyText(str) {
     navigator.clipboard.writeText(str);
-    toast.show("Скопировано!");
+    toast.show(t("sr_copied"));
   }
 
   return (
     <div style={{ ...S.col, gap: 24, maxWidth: 800, margin: "0 auto" }}>
-      <div style={S.h2}>💬 Умные ответы</div>
+      <div style={S.h2}>{t("sr_title")}</div>
       <div style={S.muted}>
-        Вставьте текст поста, чтобы получить 3 варианта комментария для Threads. Безопасный ручной режим.
+        {t("sr_desc")}
       </div>
 
       <div style={S.card}>
         {accounts && accounts.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            <label style={S.label}>Аккаунт (Стиль ответов)</label>
+            <label style={S.label}>{t("sr_acc_label")}</label>
             <select style={S.select} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              <option value="">🤖 Без индивидуального стиля</option>
+              <option value="">{t("sr_acc_none")}</option>
               {accounts.map(a => <option key={a.id} value={a.id}>{a.icon} {a.name} ({a.platform})</option>)}
             </select>
           </div>
         )}
 
-        <label style={S.label}>Текст поста для ответа</label>
+        <label style={S.label}>{t("sr_text_label")}</label>
         <textarea
           style={{ ...S.textarea, minHeight: 100, marginBottom: 16 }}
-          placeholder="Вставьте текст или мысль поста..."
+          placeholder={t("sr_text_ph")}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -1127,7 +1383,7 @@ function SmartRepliesView({ accounts, toast }) {
           style={{ ...S.btnPrimary, width: "100%", opacity: loading ? 0.7 : 1 }}
           disabled={loading}
         >
-          {loading ? "Генерация ответа..." : "Сгенерировать 3 варианта"}
+          {loading ? t("sr_btn_load") : t("sr_btn")}
         </button>
       </div>
 
@@ -1138,7 +1394,7 @@ function SmartRepliesView({ accounts, toast }) {
               <div style={{ ...S.row, justifyContent: "space-between", marginBottom: 12 }}>
                 <span style={{ fontWeight: 700, color: "#00d4aa" }}>{v.type}</span>
                 <button onClick={() => copyText(v.text)} style={{ ...S.btnGhost, padding: "4px 12px", fontSize: 12 }}>
-                  Копировать
+                  {t("sr_copy")}
                 </button>
               </div>
               <div style={{ color: "#e6edf3", whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.5 }}>{v.text}</div>
@@ -1152,6 +1408,10 @@ function SmartRepliesView({ accounts, toast }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [lang, setLang] = useState(localStorage.getItem("sf_lang") || "ru");
+  const changeLang = (l) => { setLang(l); localStorage.setItem("sf_lang", l); };
+  const t = useCallback((key) => DICTS[lang]?.[key] || DICTS.ru[key] || key, [lang]);
+
   const [user, setUser] = useState(null);
   const [view, setView] = useState("generator");
   const [accounts, setAccounts] = useState([]);
@@ -1236,11 +1496,12 @@ export default function App() {
     admin: <AdminView toast={toast} />,
   };
 
-  const viewLabels = { generator: "✨ Генератор", smart_replies: "💬 Умные ответы", schedule: "📅 Планировщик", analytics: "📈 Аналитика", accounts: "📱 Аккаунты", logs: "📊 Логи", admin: "⚙️ Администратор" };
+  const viewLabels = { generator: t("generator"), smart_replies: t("smart_replies"), schedule: t("schedule"), analytics: t("analytics"), accounts: t("accounts"), logs: t("logs"), admin: t("admin") };
 
   return (
-    <div style={{ ...S.page, minHeight: "100vh" }}>
-      {toast.toast && <Toast key={toast.toast.id} message={toast.toast.message} type={toast.toast.type} onClose={toast.clear} />}
+    <I18nContext.Provider value={{ lang, changeLang, t }}>
+      <div style={{ ...S.page, minHeight: "100vh" }}>
+        {toast.toast && <Toast key={toast.toast.id} message={toast.toast.message} type={toast.toast.type} onClose={toast.clear} />}
 
       {/* Mobile header */}
       {isMobile && (
@@ -1268,6 +1529,7 @@ export default function App() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </I18nContext.Provider>
   );
 }
