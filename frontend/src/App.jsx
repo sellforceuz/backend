@@ -575,7 +575,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
   const [triggeringAutopilot, setTriggeringAutopilot] = useState({});
 
   function getAutopilotForm(a) {
-    return autopilotForms[a.id] || { autopilot_enabled: a.autopilot_enabled || false, content_focus: a.content_focus || "" };
+    return autopilotForms[a.id] || { autopilot_enabled: a.autopilot_enabled || false, content_focus: a.content_focus || "", custom_prompt: a.custom_prompt || "" };
   }
 
   async function save(e) {
@@ -606,6 +606,7 @@ function AccountsView({ accounts, setAccounts, toast }) {
         color: a.color, icon: a.icon,
         autopilot_enabled: f.autopilot_enabled,
         content_focus: f.content_focus,
+        custom_prompt: f.custom_prompt,
       });
       setAccounts(prev => prev.map(acc => acc.id === a.id ? { ...acc, ...f } : acc));
       toast.show(f.autopilot_enabled ? "🤖 Автопилот включён!" : "Автопилот выключен");
@@ -788,6 +789,17 @@ function AccountsView({ accounts, setAccounts, toast }) {
                       value={apf.content_focus}
                       onChange={e => setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, content_focus: e.target.value } }))}
                       placeholder="Например: B2B продажи в Узбекистане, CRM системы, автоматизация бизнеса, кейсы клиентов..."
+                    />
+                  </div>
+
+                  {/* Custom Prompt */}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ ...S.label, fontSize: 12 }}>Стиль AI (Tone of Voice)</label>
+                    <textarea
+                      style={{ ...S.textarea, minHeight: 70, fontSize: 12 }}
+                      value={apf.custom_prompt}
+                      onChange={e => setAutopilotForms(s => ({ ...s, [a.id]: { ...apf, custom_prompt: e.target.value } }))}
+                      placeholder="Например: Пиши дерзко, с юмором, без воды. Обращайся к предпринимателям на 'ты'."
                     />
                   </div>
 
