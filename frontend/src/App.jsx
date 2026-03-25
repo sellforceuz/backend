@@ -1093,12 +1093,28 @@ function AnalyticsView({ toast, user }) {
   const [loading, setLoading] = useState(true);
   const isAgency = user?.plan === "agency";
 
-  useEffect(() => {
-    api.get("/api/posts/stats")
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const fetchPosts = () => {
+    setLoading(true);
+    const query = new URLSearchParams();
+    if (startDate) query.append("startDate", startDate);
+    if (endDate) query.append("endDate", endDate + "T23:59:59.999Z");
+
+    api.get(`/api/posts/stats?${query.toString()}`)
       .then(d => setPosts(d.posts))
       .catch(err => toast.show(err.message, "error"))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, [startDate, endDate]);
 
   function handlePrint() {
     if (!isAgency) {
@@ -1131,7 +1147,7 @@ function AnalyticsView({ toast, user }) {
             <span style={{ fontSize: 36, fontWeight: 900 }}>⚡</span>
             <div>
               <div style={{ fontWeight: 900, fontSize: 22 }}>SellForce AI — Отчёт по публикациям</div>
-              <div style={{ color: "#666", fontSize: 13 }}>{user?.name} · Период: последние 30 дней · {new Date().toLocaleDateString("ru")}</div>
+              <div style={{ color: "#666", fontSize: 13 }}>{user?.name} · Период: {startDate ? new Date(startDate).toLocaleDateString("ru") : ""} — {endDate ? new Date(endDate).toLocaleDateString("ru") : ""}</div>
             </div>
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1159,13 +1175,28 @@ function AnalyticsView({ toast, user }) {
         </div>
       </div>
 
-      <div style={{ ...S.row, justifyContent: "space-between" }}>
+      <div style={{ ...S.row, justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
         <div style={S.h2}>{t("an_title")}</div>
-        {isAgency ? (
-          <button onClick={handlePrint} style={S.btnPrimary}>{t("an_pdf")}</button>
-        ) : (
-          <button disabled title="Доступно только на тарифе Agency" style={{ ...S.btnGhost, opacity: 0.45, cursor: "not-allowed" }}>{t("an_pdf_lock")}</button>
-        )}
+        <div style={{ ...S.row, gap: 12 }}>
+          <input 
+            type="date" 
+            style={{ ...S.input, width: "auto", padding: "8px 12px", fontSize: 13 }} 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)} 
+          />
+          <span style={{ color: "#8b949e" }}>—</span>
+          <input 
+            type="date" 
+            style={{ ...S.input, width: "auto", padding: "8px 12px", fontSize: 13 }} 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)} 
+          />
+          {isAgency ? (
+            <button onClick={handlePrint} style={S.btnPrimary}>{t("an_pdf")}</button>
+          ) : (
+            <button disabled title="Доступно только на тарифе Agency" style={{ ...S.btnGhost, opacity: 0.45, cursor: "not-allowed" }}>{t("an_pdf_lock")}</button>
+          )}
+        </div>
       </div>
 
       {loading ? <div style={S.muted}>{t("log_loading")}</div> : posts.length === 0 ? (

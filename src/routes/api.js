@@ -400,11 +400,13 @@ router.get("/posts/:id/stats", async (req, res) => {
   }
 });
 
-// GET /api/posts/stats — аналитика: последние 50 постов с метриками
+// GET /api/posts/stats — аналитика: последние посты с метриками или по датам
 router.get("/posts/stats", async (req, res) => {
   try {
     const { pool } = require("../db");
-    const r = await pool.query(`
+    const { startDate, endDate } = req.query;
+
+    let query = `
       SELECT
         p.id, p.text, p.status, p.platforms,
         p.tg_message_id, p.threads_post_id, p.metrics,
@@ -414,9 +416,21 @@ router.get("/posts/stats", async (req, res) => {
       FROM posts p
       JOIN accounts a ON a.id = p.account_id
       WHERE p.workspace_id = $1
-      ORDER BY p.created_at DESC
-      LIMIT 50
-    `, [req.workspaceId]);
+    `;
+    const params = [req.workspaceId];
+    
+    if (startDate) {
+      params.push(startDate);
+      query += ` AND p.scheduled_at >= $${params.length}`;
+    }
+    if (endDate) {
+      params.push(endDate);
+      query += ` AND p.scheduled_at <= $${params.length}`;
+    }
+    
+    query += ` ORDER BY p.scheduled_at DESC LIMIT 500`;
+
+    const r = await pool.query(query, params);
     res.json({ posts: r.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
