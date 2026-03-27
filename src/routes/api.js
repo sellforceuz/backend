@@ -353,7 +353,7 @@ router.post("/generate-image", generateLimiter, checkLimit("generation"), async 
     imagePrompt = imagePrompt.replace(/^["']|["']$/g, '');
 
     const pollKey = process.env.POLLINATIONS_API_KEY;
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080${pollKey ? `&key=${pollKey}` : ''}`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080&model=flux${pollKey ? `&key=${pollKey}` : ''}`;
     
     await Usage.increment(req.workspaceId, "generations");
     res.json({ url });

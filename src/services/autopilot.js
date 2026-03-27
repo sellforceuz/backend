@@ -132,7 +132,7 @@ async function runDailyAutopilot(account) {
       
       const pollKey = process.env.POLLINATIONS_API_KEY;
       const mediaUrl = imagePrompt 
-        ? `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080${pollKey ? `&key=${pollKey}`:''}`
+        ? `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080&model=flux${pollKey ? `&key=${pollKey}`:''}`
         : null;
 
       // Определяем платформы для публикации
