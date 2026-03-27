@@ -131,7 +131,7 @@ async function runDailyAutopilot(account) {
       const scheduledAt = getScheduledAt(times[i], today);
       
       const mediaUrl = imagePrompt 
-        ? `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080&nologo=true`
+        ? `https://api.airforce/imagine2?prompt=${encodeURIComponent(imagePrompt)}&size=1:1`
         : null;
 
       // Определяем платформы для публикации
