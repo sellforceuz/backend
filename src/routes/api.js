@@ -334,7 +334,7 @@ router.post("/generate-image", generateLimiter, checkLimit("generation"), async 
     const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
     const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-    const prompt = `Translate the essence of this post into a short, descriptive 1-sentence prompt for an AI image generator (in English). Only return the English string, nothing else. Text: "${text.slice(0, 300)}"`;
+    const prompt = `Translate the essence of this post into a short, descriptive 1-sentence prompt for an AI image generator (in English). Important: specify "no text, no letters, no typography" in the prompt to prevent the AI from drawing gibberish text. Only return the English string, nothing else. Text: "${text.slice(0, 300)}"`;
 
     const groqRes = await fetch(GROQ_URL, {
       method: "POST",

@@ -69,7 +69,7 @@ ${formats.map((f, i) => `Пост ${i + 1}: ${f}`).join("\n")}
   "posts": [
     {
       "text": "текст поста 1",
-      "image_prompt": "english description of a high quality photo to accompany post 1, e.g. 'A modern businessman working on a laptop in a bright cafe, cinematic lighting, 8k resolution, photorealistic'"
+      "image_prompt": "english description of a high quality photo to accompany post 1 (IMPORTANT: specify 'no text, no letters, no typography' to prevent gibberish overlay), e.g. 'A modern businessman working on a laptop in a bright cafe, cinematic lighting, 8k resolution, photorealistic, no text'"
     },
     {
       "text": "текст поста 2",
