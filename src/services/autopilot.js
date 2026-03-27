@@ -130,8 +130,9 @@ async function runDailyAutopilot(account) {
 
       const scheduledAt = getScheduledAt(times[i], today);
       
+      const pollKey = process.env.POLLINATIONS_API_KEY;
       const mediaUrl = imagePrompt 
-        ? `https://api.airforce/imagine2?prompt=${encodeURIComponent(imagePrompt)}&size=1:1`
+        ? `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080${pollKey ? `&key=${pollKey}`:''}`
         : null;
 
       // Определяем платформы для публикации

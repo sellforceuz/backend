@@ -352,7 +352,8 @@ router.post("/generate-image", generateLimiter, checkLimit("generation"), async 
     // убираем кавычки если Llama их добавила
     imagePrompt = imagePrompt.replace(/^["']|["']$/g, '');
 
-    const url = `https://api.airforce/imagine2?prompt=${encodeURIComponent(imagePrompt)}&size=1:1`;
+    const pollKey = process.env.POLLINATIONS_API_KEY;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1080&height=1080${pollKey ? `&key=${pollKey}` : ''}`;
     
     await Usage.increment(req.workspaceId, "generations");
     res.json({ url });
