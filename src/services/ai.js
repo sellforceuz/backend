@@ -3,7 +3,7 @@ const fetch = require("node-fetch");
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-async function generatePost({ accountName, accountHandle, topic, tone, format, idea, customPrompt }) {
+async function generatePost({ accountName, accountHandle, topic, tone, format, idea, customPrompt, topPosts = [] }) {
   const apiKey = process.env.GROQ_API_KEY || process.env.GOOGLE_AI_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY не задан в Railway");
 
@@ -16,6 +16,7 @@ ${idea ? `Идея/контекст: "${idea}"` : ""}
 Формат: ${format || "на выбор"}
 
 ${customPrompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE):\n${customPrompt}\n` : ""}
+${topPosts && topPosts.length > 0 ? `🔥 Успешные примеры твоих прошлых постов, которые набрали много реакций:\n${topPosts.map((t, i) => `${i+1}. "${t}"`).join('\n')}\n👉 Проанализируй их структуру, тон и подачу. Опирайся на эту стилистику, чтобы новый пост тоже залетел на высокие охваты!\n` : ""}
 Правила поста:
 - До 500 символов (ограничение Threads)
 - Первое предложение ОСТАНАВЛИВАЕТ скролл: провокация, цифра, боль, неожиданный факт

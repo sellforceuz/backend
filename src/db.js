@@ -246,6 +246,46 @@ const Posts = {
     `, [workspaceId, limit]);
     return r.rows;
   },
+  getTopPerforming: async (accountId, limit = 3) => {
+    // Получаем последние 50 успешных постов аккаунта для оценки
+    const r = await pool.query(`
+      SELECT text, metrics FROM posts 
+      WHERE account_id=$1 AND status IN ('published', 'partially_failed')
+      ORDER BY scheduled_at DESC LIMIT 50
+    `, [accountId]);
+    
+    if (r.rows.length === 0) return [];
+
+    // Считаем score для каждого поста
+    const scored = r.rows.map(p => {
+      const m = p.metrics || {};
+      let score = 0;
+      
+      // Threads metrics: likes(1) + replies(2) + reposts(3) + quotes(3)
+      if (m.threads) {
+        score += (m.threads.likes || 0) * 1;
+        score += (m.threads.replies || 0) * 2;
+        score += (m.threads.reposts || 0) * 3;
+        score += (m.threads.quotes || 0) * 3;
+      }
+      
+      // Telegram metrics: views(0.1) + reactions(1) (если бы были)
+      if (m.telegram) {
+        // У нас пока только channel_members, но если появятся views/reactions:
+        score += (m.telegram.views || 0) * 0.1;
+        score += (m.telegram.reactions || 0) * 1;
+      }
+      
+      return { text: p.text, score };
+    });
+
+    // Оставляем только те, где score > 0 (чтобы не кормить нули), сортируем и берем Топ-3
+    return scored
+      .filter(p => p.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(p => p.text);
+  },
   create: async (workspaceId, data) => {
     const r = await pool.query(
       `INSERT INTO posts (workspace_id,account_id,text,media_url,platforms,scheduled_at)

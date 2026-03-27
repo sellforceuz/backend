@@ -300,11 +300,19 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
     const accounts = await Accounts.getAll(req.workspaceId);
     const account = accounts.find(a => a.id === parseInt(account_id));
 
+    // Вытягиваем успешные старые посты, если указан аккаунт
+    let topPosts = [];
+    if (account) {
+      const { Posts } = require("../db");
+      topPosts = await Posts.getTopPerforming(account.id, 3);
+    }
+
     const text = await generatePost({
       accountName: account?.name || "Мой аккаунт",
       accountHandle: account?.handle || "",
       topic, tone, format, idea,
       customPrompt: account?.custom_prompt || null,
+      topPosts
     });
 
     await Usage.increment(req.workspaceId, "generations");

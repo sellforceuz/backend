@@ -37,6 +37,8 @@ async function generateDailyPosts(account, count) {
   if (!apiKey) throw new Error("GROQ_API_KEY не задан");
 
   const focus = account.content_focus || "бизнес, предпринимательство, СНГ";
+  const { Posts } = require("../db");
+  const topPosts = await Posts.getTopPerforming(account.id, 3);
   
   // Если постов много, зацикливаем форматы, чтобы хватило на всех
   const formats = [];
@@ -49,6 +51,8 @@ async function generateDailyPosts(account, count) {
 Тематика аккаунта: "${focus}"
 Аккаунт: ${account.name} (${account.handle})
 
+${account.custom_prompt ? `ВАЖНОЕ ПРАВИЛО (СТИЛЬ И TONE OF VOICE):\n${account.custom_prompt}\n` : ""}
+${topPosts && topPosts.length > 0 ? `🔥 Успешные примеры твоих прошлых постов, которые набрали много реакций:\n${topPosts.map((t, i) => `${i+1}. "${t}"`).join('\n')}\n👉 Проанализируй их структуру, тон и подачу. Опирайся на эту стилистику, чтобы новые посты тоже залетели на высокие охваты!\n` : ""}
 Сгенерируй ${count} уникальных постов на сегодня. Каждый пост должен быть в СВОЁМ формате:
 ${formats.map((f, i) => `Пост ${i + 1}: ${f}`).join("\n")}
 
