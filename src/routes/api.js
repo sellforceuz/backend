@@ -310,6 +310,7 @@ router.post("/generate", generateLimiter, checkLimit("generation"), async (req, 
     const text = await generatePost({
       accountName: account?.name || "Мой аккаунт",
       accountHandle: account?.handle || "",
+      platform: account?.platform || "telegram",
       topic, tone, format, idea,
       customPrompt: account?.custom_prompt || null,
       topPosts
